@@ -6,6 +6,7 @@ use futures::{Future, IntoFuture};
 use futures::unsync::oneshot;
 use reqwest::unstable::async::Client;
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::fmt::Display;
 use utils::is_separator;
 
@@ -13,8 +14,8 @@ use utils::is_separator;
 pub struct Executor<'a> {
     /// Reqwest client
     pub client: &'a Client,
-    /// A oneshot sender for shuting down the event loop
-    pub shutdown: Option<oneshot::Sender<()>>,
+    /// A field to indicate that shutdown.
+    pub shutdown: Cell<Option<oneshot::Sender<i64>>>,
 }
 
 impl<'a> Executor<'a> {
@@ -23,7 +24,8 @@ impl<'a> Executor<'a> {
     /// Future resolves to a message to send back. If nothing can be
     /// replied, it rejects.
     pub fn execute(
-        &mut self,
+        &self,
+        id: i64,
         command: &str,
         is_admin: bool,
     ) -> Box<Future<Item=Cow<'static, str>, Error=()>> {
@@ -46,14 +48,17 @@ impl<'a> Executor<'a> {
             ("/meta", param) =>
                 Box::new(meta::run(self.client, param).then(reply)),
             ("/version", "") => Box::new(version()),
-            ("/shutdown", "") if is_admin => Box::new(self.shutdown()),
+            ("/shutdown", "") if is_admin => Box::new(self.shutdown(id)),
             _ => Box::new(Err(()).into_future()),
         }
     }
 
-    fn shutdown(&mut self) -> impl Future<Item=Cow<'static, str>, Error=()> {
-        self.shutdown.take().unwrap().send(()).unwrap();
-        Ok("bye".into()).into_future()
+    fn shutdown(
+        &self,
+        id: i64
+    ) -> impl Future<Item=Cow<'static, str>, Error=()> {
+        self.shutdown.replace(None).unwrap().send(id).unwrap();
+        Ok("start shutting down...".into()).into_future()
     }
 }
 

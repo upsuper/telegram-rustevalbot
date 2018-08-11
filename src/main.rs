@@ -16,14 +16,17 @@ mod command;
 mod utils;
 
 use futures::{Future, Stream};
+use futures::future::Either;
 use futures::unsync::oneshot;
 use reqwest::header::{Headers, UserAgent};
 use reqwest::unstable::async::Client;
+use std::cell::{Cell, RefCell};
 use std::env;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
+use std::rc::Rc;
 use tokio_core::reactor::{Core, Handle};
 use telegram_bot::{
-    Api, CanSendMessage, Error, MessageKind,
+    Api, CanSendMessage, Error, GetUpdates, MessageKind,
     ParseMode, UpdateKind, UserId
 };
 
@@ -62,15 +65,17 @@ fn main() -> Result<(), Error> {
     let api = Api::configure(token).build(&handle)?;
     let client = build_client(&handle);
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-    let mut executor = command::Executor {
+    let executor = command::Executor {
         client: &client,
-        shutdown: Some(shutdown_sender),
+        shutdown: Cell::new(Some(shutdown_sender)),
     };
-    let mut count = 0;
     if let Some(admin_id) = &admin_id {
         api.spawn(admin_id.text(format!("Start version: {}", VERSION)));
     }
-    let future = api.stream().for_each(move |update| {
+    let counter = Rc::new(RefCell::new(0));
+    let api_to_move = api.clone();
+    let counter_to_move = counter.clone();
+    let stream = api.stream().for_each(move |update| {
         let message = match update.kind {
             UpdateKind::Message(message) => message,
             _ => return Ok(()),
@@ -79,9 +84,8 @@ fn main() -> Result<(), Error> {
             MessageKind::Text { data, .. } => data,
             _ => return Ok(()),
         };
-        count += 1;
 
-        let id = count;
+        let id = update.id;
         let username = message.from.username.unwrap_or(String::new());
         let user_id = message.from.id;
         println!(
@@ -91,8 +95,8 @@ fn main() -> Result<(), Error> {
         let is_admin = admin_id.as_ref()
             .map_or(false, |admin_id| &user_id == admin_id);
         let chat = message.chat;
-        let api = api.clone();
-        let future = executor.execute(&command, is_admin)
+        let api = api_to_move.clone();
+        let future = executor.execute(id, &command, is_admin)
             .and_then(move |reply| {
                 let reply = reply.trim_matches(utils::is_separator);
                 println!("{}> sending: {}", id, reply);
@@ -103,15 +107,45 @@ fn main() -> Result<(), Error> {
                     .and_then(move |_| {
                         println!("{}> sent", id);
                         Ok(())
-                    })
-                    .map_err(move |err| {
+                    }).map_err(move |err| {
                         println!("{}> error: {:?}", id, err);
+                    }).then(|result| {
+                        result
                     })
             });
-        handle.spawn(future);
+        let counter = &counter_to_move;
+        let counter_clone = counter.clone();
+        *counter.borrow_mut() += 1;
+        handle.spawn(future.inspect(move |_| {
+            *counter_clone.borrow_mut() -= 1;
+        }));
         Ok(())
-    }).select(shutdown_receiver.map_err(|e| {
-        Error::from(IOError::new(IOErrorKind::UnexpectedEof, e))
-    })).map_err(|(e, _)| e).and_then(|_| Ok(()));
-    core.run(future)
+    });
+    let shutdown_id = core.run(
+        stream.select2(shutdown_receiver).then(|result| {
+            match result {
+                Ok(Either::A(((), _))) => Ok(None),
+                Ok(Either::B((id, _))) => Ok(Some(id)),
+                Err(Either::A((e, _))) => Err(e),
+                Err(Either::B((e, _))) =>
+                    Err(IOError::new(IOErrorKind::Other, e).into()),
+            }
+        })
+    )?;
+    let shutdown_id = shutdown_id.expect("Unexpected stop");
+    // Waiting for any on-going futures.
+    while *counter.borrow() > 0 {
+        core.turn(None);
+    }
+    // Start exiting
+    let mut get_updates = GetUpdates::new();
+    get_updates.offset(shutdown_id + 1);
+    println!("{}> confirming", shutdown_id);
+    core.run(
+        api.send(get_updates)
+            .and_then(move |_| {
+                println!("{}> confirmed", shutdown_id);
+                api.send(admin_id.unwrap().text("bye"))
+            })
+    ).map(|_| ())
 }
