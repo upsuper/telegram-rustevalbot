@@ -3,6 +3,7 @@ mod eval;
 mod meta;
 
 use futures::{Future, IntoFuture};
+use futures::unsync::oneshot;
 use reqwest::unstable::async::Client;
 use std::borrow::Cow;
 use std::fmt::Display;
@@ -12,6 +13,8 @@ use utils::is_separator;
 pub struct Executor<'a> {
     /// Reqwest client
     pub client: &'a Client,
+    /// A oneshot sender for shuting down the event loop
+    pub shutdown: Option<oneshot::Sender<()>>,
 }
 
 impl<'a> Executor<'a> {
@@ -20,8 +23,9 @@ impl<'a> Executor<'a> {
     /// Future resolves to a message to send back. If nothing can be
     /// replied, it rejects.
     pub fn execute(
-        &self,
-        command: &str
+        &mut self,
+        command: &str,
+        is_admin: bool,
     ) -> Box<Future<Item=Cow<'static, str>, Error=()>> {
         fn reply(
             reply: Result<
@@ -42,8 +46,14 @@ impl<'a> Executor<'a> {
             ("/meta", param) =>
                 Box::new(meta::run(self.client, param).then(reply)),
             ("/version", "") => Box::new(version()),
+            ("/shutdown", "") if is_admin => Box::new(self.shutdown()),
             _ => Box::new(Err(()).into_future()),
         }
+    }
+
+    fn shutdown(&mut self) -> impl Future<Item=Cow<'static, str>, Error=()> {
+        self.shutdown.take().unwrap().send(()).unwrap();
+        Ok("bye".into()).into_future()
     }
 }
 
@@ -55,6 +65,5 @@ fn split_command<'a>(s: &'a str) -> (&'a str, &'a str) {
 }
 
 fn version() -> impl Future<Item=Cow<'static, str>, Error=()> {
-    const VERSION: &str = concat!("version: ", env!("CARGO_PKG_VERSION"));
-    Ok(VERSION.into()).into_future()
+    Ok(format!("version: {}", super::VERSION).into()).into_future()
 }
