@@ -116,8 +116,9 @@ fn main() -> Result<(), Error> {
         let counter = &counter_to_move;
         let counter_clone = counter.clone();
         *counter.borrow_mut() += 1;
-        handle.spawn(future.inspect(move |_| {
+        handle.spawn(future.then(move |result| {
             *counter_clone.borrow_mut() -= 1;
+            result
         }));
         Ok(())
     });
