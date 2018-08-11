@@ -1,5 +1,5 @@
-use htmlescape::{encode_attribute, encode_minimal};
 use futures::Future;
+use htmlescape::{encode_attribute, encode_minimal};
 use regex::{Captures, Regex};
 use reqwest::unstable::async::Client;
 
@@ -10,10 +10,7 @@ lazy_static! {
     static ref RE_CODE: Regex = Regex::new(r"`(.+?)`").unwrap();
 }
 
-pub fn run(
-    client: &Client,
-    param: &str,
-) -> impl Future<Item=String, Error=&'static str> {
+pub fn run(client: &Client, param: &str) -> impl Future<Item = String, Error = &'static str> {
     let mut body = param;
     let mut channel = None;
     let mut edition = None;
@@ -39,7 +36,7 @@ pub fn run(
     let code = if bare {
         body.to_string()
     } else {
-        format!(include_str!("eval_template.rs"), code=body)
+        format!(include_str!("eval_template.rs"), code = body)
     };
     let channel = channel.unwrap_or(Channel::Stable);
     let req = Request {
@@ -51,23 +48,22 @@ pub fn run(
         backtrace: false,
         code,
     };
-    client.post("https://play.rust-lang.org/execute")
+    client
+        .post("https://play.rust-lang.org/execute")
         .json(&req)
         .send()
         .and_then(|resp| resp.error_for_status())
         .and_then(|mut resp| resp.json())
         .and_then(move |resp: Response| {
             if resp.success {
-                return Ok(format!(
-                    "<pre>{}</pre>",
-                    encode_minimal(resp.stdout.trim()),
-                ));
+                return Ok(format!("<pre>{}</pre>", encode_minimal(resp.stdout.trim()),));
             }
             for line in resp.stderr.split('\n') {
                 let line = line.trim();
-                if line.starts_with("Compiling") ||
-                    line.starts_with("Finished") ||
-                    line.starts_with("Running") {
+                if line.starts_with("Compiling")
+                    || line.starts_with("Finished")
+                    || line.starts_with("Running")
+                {
                     continue;
                 }
                 let line = encode_minimal(line);
@@ -85,10 +81,7 @@ pub fn run(
                     )
                 });
                 let line = RE_CODE.replace_all(&line, |captures: &Captures| {
-                    format!(
-                        "<code>{}</code>",
-                        captures.get(1).unwrap().as_str()
-                    )
+                    format!("<code>{}</code>", captures.get(1).unwrap().as_str())
                 });
                 return Ok(format!("{}", line));
             }

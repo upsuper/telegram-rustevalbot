@@ -4,10 +4,7 @@ use reqwest::unstable::async::Client;
 use super::eval::Channel;
 use utils;
 
-pub fn run(
-    client: &Client,
-    param: &str,
-) -> Box<Future<Item=String, Error=&'static str>> {
+pub fn run(client: &Client, param: &str) -> Box<Future<Item = String, Error = &'static str>> {
     let mut channel = Channel::Stable;
     match param.trim_matches(utils::is_separator) {
         "" => {}
@@ -28,9 +25,7 @@ pub fn run(
         .and_then(|resp: Version| {
             Ok(format!(
                 "version: {} ({:.9} {})",
-                resp.version,
-                resp.hash,
-                resp.date
+                resp.version, resp.hash, resp.date
             ))
         })
         .map_err(utils::map_reqwest_error);
