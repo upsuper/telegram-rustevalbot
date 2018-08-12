@@ -78,6 +78,7 @@ impl<'a> Executor<'a> {
             match info.name {
                 "/crate" => execute!(crate_::run(&self.client, info.args)),
                 "/eval" => execute!(eval::run(&self.client, info.args)),
+                "/rustc_version" => execute!(version::run(&self.client, info.args)),
                 _ => {}
             }
             if cmd.is_private || info.at_self {
