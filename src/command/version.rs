@@ -24,7 +24,7 @@ pub fn run(client: &Client, param: &str) -> Box<Future<Item = String, Error = &'
         .and_then(|mut resp| resp.json())
         .and_then(|resp: Version| {
             Ok(format!(
-                "version: {} ({:.9} {})",
+                "rustc {} ({:.9} {})",
                 resp.version, resp.hash, resp.date
             ))
         })

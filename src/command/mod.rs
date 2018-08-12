@@ -1,6 +1,6 @@
 mod crate_;
 mod eval;
-mod meta;
+mod version;
 
 use futures::unsync::oneshot;
 use futures::{Future, IntoFuture};
@@ -82,8 +82,8 @@ impl<'a> Executor<'a> {
             }
             if cmd.is_private || info.at_self {
                 match info.name {
-                    "/meta" => execute!(meta::run(&self.client, info.args)),
-                    "/version" => execute!(version()),
+                    "/version" => execute!(version::run(&self.client, info.args)),
+                    "/about" => execute!(about()),
                     _ => {}
                 }
             }
@@ -124,6 +124,6 @@ impl<'a> Executor<'a> {
     }
 }
 
-fn version() -> impl Future<Item = Cow<'static, str>, Error = Void> {
-    Ok(format!("version: {}", super::VERSION).into()).into_future()
+fn about() -> impl Future<Item = Cow<'static, str>, Error = Void> {
+    Ok(format!("{} {}", env!("CARGO_PKG_NAME"), super::VERSION).into()).into_future()
 }
