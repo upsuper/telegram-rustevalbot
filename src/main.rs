@@ -3,6 +3,8 @@ extern crate htmlescape;
 extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate matches;
 extern crate percent_encoding;
 extern crate regex;
 extern crate reqwest;
@@ -25,7 +27,7 @@ use std::env;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::rc::Rc;
 use telegram_bot::{
-    Api, CanSendMessage, Error, GetUpdates, MessageKind, ParseMode, UpdateKind, UserId,
+    Api, CanSendMessage, Error, GetUpdates, MessageChat, MessageKind, ParseMode, UpdateKind, UserId,
 };
 use tokio_core::reactor::{Core, Handle};
 
@@ -75,7 +77,7 @@ fn main() -> Result<(), Error> {
             _ => return Ok(()),
         };
         let command = match message.kind {
-            MessageKind::Text { data, .. } => data,
+            MessageKind::Text { ref data, .. } => data,
             _ => return Ok(()),
         };
 
@@ -90,25 +92,30 @@ fn main() -> Result<(), Error> {
             .as_ref()
             .map_or(false, |admin_id| &user_id == admin_id);
         let chat = message.chat;
+        let is_private = matches!(chat, MessageChat::Private(..));
+        let cmd = command::Command {
+            id,
+            command,
+            is_admin,
+            is_private,
+        };
         let api = api_to_move.clone();
-        let future = executor
-            .execute(id, &command, is_admin)
-            .and_then(move |reply| {
-                let reply = reply.trim_matches(utils::is_separator);
-                println!("{}> sending: {}", id, reply);
-                let mut msg = chat.text(reply);
-                msg.parse_mode(ParseMode::Html);
-                msg.disable_preview();
-                api.send(msg)
-                    .and_then(move |_| {
-                        println!("{}> sent", id);
-                        Ok(())
-                    })
-                    .map_err(move |err| {
-                        println!("{}> error: {:?}", id, err);
-                    })
-                    .then(|result| result)
-            });
+        let future = executor.execute(cmd).and_then(move |reply| {
+            let reply = reply.trim_matches(utils::is_separator);
+            println!("{}> sending: {}", id, reply);
+            let mut msg = chat.text(reply);
+            msg.parse_mode(ParseMode::Html);
+            msg.disable_preview();
+            api.send(msg)
+                .and_then(move |_| {
+                    println!("{}> sent", id);
+                    Ok(())
+                })
+                .map_err(move |err| {
+                    println!("{}> error: {:?}", id, err);
+                })
+                .then(|result| result)
+        });
         let counter = &counter_to_move;
         let counter_clone = counter.clone();
         *counter.borrow_mut() += 1;
