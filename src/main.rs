@@ -20,9 +20,7 @@ mod utils;
 use futures::future::Either;
 use futures::unsync::oneshot;
 use futures::{Future, Stream};
-use reqwest::header::{Headers, UserAgent};
-use reqwest::unstable::async::Client;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::env;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::rc::Rc;
@@ -30,7 +28,7 @@ use telegram_bot::{
     Api, CanSendMessage, Error, GetMe, GetUpdates, MessageChat, MessageKind, ParseMode, UpdateKind,
     UserId,
 };
-use tokio_core::reactor::{Core, Handle};
+use tokio_core::reactor::Core;
 
 const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("VERSION"), ")",);
 const USER_AGENT: &str = concat!(
@@ -40,15 +38,6 @@ const USER_AGENT: &str = concat!(
     " - ",
     env!("CARGO_PKG_HOMEPAGE"),
 );
-
-fn build_client(handle: &Handle) -> Client {
-    let mut headers = Headers::new();
-    headers.set(UserAgent::new(USER_AGENT));
-    Client::builder()
-        .default_headers(headers)
-        .build(handle)
-        .unwrap()
-}
 
 fn main() -> Result<(), Error> {
     let mut core = Core::new()?;
@@ -65,13 +54,8 @@ fn main() -> Result<(), Error> {
     let self_username = self_user.username.expect("No username?");
     println!("Authorized as @{}", self_username);
     // Build the command executor
-    let client = build_client(&handle);
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-    let executor = command::Executor {
-        client: &client,
-        username: &self_username,
-        shutdown: Cell::new(Some(shutdown_sender)),
-    };
+    let executor = command::Executor::new(&handle, &self_username, shutdown_sender);
     if let Some(admin_id) = &admin_id {
         api.spawn(admin_id.text(format!("Start version: {} @{}", VERSION, self_username)));
     }

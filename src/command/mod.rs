@@ -4,20 +4,22 @@ mod meta;
 
 use futures::unsync::oneshot;
 use futures::{Future, IntoFuture};
+use reqwest::header::{Headers, UserAgent};
 use reqwest::unstable::async::Client;
 use std::borrow::Cow;
 use std::cell::Cell;
 use std::fmt::Display;
+use tokio_core::reactor::Handle;
 use utils::is_separator;
 
 /// Command executor.
 pub struct Executor<'a> {
     /// Reqwest client
-    pub client: &'a Client,
+    client: Client,
     /// Telegram username of the bot
-    pub username: &'a str,
+    username: &'a str,
     /// A field to indicate that shutdown.
-    pub shutdown: Cell<Option<oneshot::Sender<i64>>>,
+    shutdown: Cell<Option<oneshot::Sender<i64>>>,
 }
 
 pub struct Command<'a> {
@@ -32,6 +34,22 @@ pub struct Command<'a> {
 }
 
 impl<'a> Executor<'a> {
+    /// Create new command executor.
+    pub fn new(handle: &Handle, username: &'a str, shutdown: oneshot::Sender<i64>) -> Self {
+        let mut headers = Headers::new();
+        headers.set(UserAgent::new(super::USER_AGENT));
+        let client = Client::builder()
+            .default_headers(headers)
+            .build(handle)
+            .unwrap();
+        let shutdown = Cell::new(Some(shutdown));
+        Executor {
+            client,
+            username,
+            shutdown,
+        }
+    }
+
     /// Execute a command.
     ///
     /// Future resolves to a message to send back. If nothing can be
@@ -46,9 +64,9 @@ impl<'a> Executor<'a> {
             })
         }
         match split_command(cmd.command) {
-            ("/crate", param) => Box::new(crate_::run(self.client, param).then(reply)),
-            ("/eval", param) => Box::new(eval::run(self.client, param).then(reply)),
-            ("/meta", param) => Box::new(meta::run(self.client, param).then(reply)),
+            ("/crate", param) => Box::new(crate_::run(&self.client, param).then(reply)),
+            ("/eval", param) => Box::new(eval::run(&self.client, param).then(reply)),
+            ("/meta", param) => Box::new(meta::run(&self.client, param).then(reply)),
             ("/version", "") => Box::new(version()),
             ("/shutdown", "") if cmd.is_admin => Box::new(self.shutdown(cmd.id)),
             _ => Box::new(Err(()).into_future()),
