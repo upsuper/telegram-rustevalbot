@@ -14,6 +14,8 @@ use utils::is_separator;
 pub struct Executor<'a> {
     /// Reqwest client
     pub client: &'a Client,
+    /// Telegram username of the bot
+    pub username: &'a str,
     /// A field to indicate that shutdown.
     pub shutdown: Cell<Option<oneshot::Sender<i64>>>,
 }

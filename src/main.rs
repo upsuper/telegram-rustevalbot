@@ -27,7 +27,8 @@ use std::env;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind};
 use std::rc::Rc;
 use telegram_bot::{
-    Api, CanSendMessage, Error, GetUpdates, MessageChat, MessageKind, ParseMode, UpdateKind, UserId,
+    Api, CanSendMessage, Error, GetMe, GetUpdates, MessageChat, MessageKind, ParseMode, UpdateKind,
+    UserId,
 };
 use tokio_core::reactor::{Core, Handle};
 
@@ -58,15 +59,21 @@ fn main() -> Result<(), Error> {
         .and_then(|user_id| str::parse(&user_id).map(UserId::new).ok());
 
     let handle = core.handle();
+    // Configure Telegram API and get user information of ourselves
     let api = Api::configure(token).build(&handle)?;
+    let self_user = core.run(api.send(GetMe))?;
+    let self_username = self_user.username.expect("No username?");
+    println!("Authorized as @{}", self_username);
+    // Build the command executor
     let client = build_client(&handle);
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let executor = command::Executor {
         client: &client,
+        username: &self_username,
         shutdown: Cell::new(Some(shutdown_sender)),
     };
     if let Some(admin_id) = &admin_id {
-        api.spawn(admin_id.text(format!("Start version: {}", VERSION)));
+        api.spawn(admin_id.text(format!("Start version: {} @{}", VERSION, self_username)));
     }
     let counter = Rc::new(RefCell::new(0));
     let api_to_move = api.clone();
