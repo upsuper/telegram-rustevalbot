@@ -10,7 +10,7 @@ use std::borrow::Cow;
 use std::cell::Cell;
 use std::fmt::Display;
 use tokio_core::reactor::Handle;
-use utils::is_separator;
+use utils::{is_separator, Void};
 
 /// Command executor.
 pub struct Executor<'a> {
@@ -31,6 +31,12 @@ pub struct Command<'a> {
     pub is_admin: bool,
     /// Whether this command is in private chat
     pub is_private: bool,
+}
+
+struct CommandInfo<'a> {
+    name: &'a str,
+    args: &'a str,
+    at_self: bool,
 }
 
 impl<'a> Executor<'a> {
@@ -63,29 +69,61 @@ impl<'a> Executor<'a> {
                 Err(err) => format!("error: {}", err).into(),
             })
         }
-        match split_command(cmd.command) {
-            ("/crate", param) => Box::new(crate_::run(&self.client, param).then(reply)),
-            ("/eval", param) => Box::new(eval::run(&self.client, param).then(reply)),
-            ("/meta", param) => Box::new(meta::run(&self.client, param).then(reply)),
-            ("/version", "") => Box::new(version()),
-            ("/shutdown", "") if cmd.is_admin => Box::new(self.shutdown(cmd.id)),
-            _ => Box::new(Err(()).into_future()),
+        macro_rules! execute {
+            ($future:expr) => {
+                return Box::new($future.then(reply));
+            };
         }
+        if let Some(info) = self.parse_command(cmd.command) {
+            match info.name {
+                "/crate" => execute!(crate_::run(&self.client, info.args)),
+                "/eval" => execute!(eval::run(&self.client, info.args)),
+                _ => {}
+            }
+            if cmd.is_private || info.at_self {
+                match info.name {
+                    "/meta" => execute!(meta::run(&self.client, info.args)),
+                    "/version" => execute!(version()),
+                    _ => {}
+                }
+            }
+            if cmd.is_admin {
+                match info.name {
+                    "/shutdown" => execute!(self.shutdown(cmd.id)),
+                    _ => {}
+                }
+            }
+        }
+        Box::new(Err(()).into_future())
     }
 
-    fn shutdown(&self, id: i64) -> impl Future<Item = Cow<'static, str>, Error = ()> {
+    fn parse_command<'s>(&self, s: &'s str) -> Option<CommandInfo<'s>> {
+        let (name, args) = match s.find(is_separator) {
+            Some(pos) => (&s[..pos], &s[pos + 1..]),
+            None => (s, ""),
+        };
+        let (name, at_self) = match name.find('@') {
+            Some(pos) => {
+                if &name[pos + 1..] != self.username {
+                    return None;
+                }
+                (&name[..pos], true)
+            }
+            None => (name, false),
+        };
+        Some(CommandInfo {
+            name,
+            args,
+            at_self,
+        })
+    }
+
+    fn shutdown(&self, id: i64) -> impl Future<Item = Cow<'static, str>, Error = Void> {
         self.shutdown.replace(None).unwrap().send(id).unwrap();
         Ok("start shutting down...".into()).into_future()
     }
 }
 
-fn split_command<'a>(s: &'a str) -> (&'a str, &'a str) {
-    match s.find(is_separator) {
-        Some(pos) => (&s[..pos], &s[pos + 1..]),
-        None => (s, ""),
-    }
-}
-
-fn version() -> impl Future<Item = Cow<'static, str>, Error = ()> {
+fn version() -> impl Future<Item = Cow<'static, str>, Error = Void> {
     Ok(format!("version: {}", super::VERSION).into()).into_future()
 }

@@ -1,4 +1,14 @@
 use reqwest;
+use std::fmt;
+
+#[derive(Clone, Copy, Debug)]
+pub enum Void {}
+
+impl fmt::Display for Void {
+    fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
+        Ok(())
+    }
+}
 
 pub fn is_separator(c: char) -> bool {
     c.is_whitespace() || c.is_control()
