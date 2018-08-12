@@ -88,7 +88,7 @@ impl<'a> Executor<'a> {
                     _ => {}
                 }
             }
-            if cmd.is_admin {
+            if cmd.is_private && cmd.is_admin {
                 match info.name {
                     "/shutdown" => execute!(self.shutdown(cmd.id)),
                     _ => {}
