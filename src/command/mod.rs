@@ -126,5 +126,11 @@ impl<'a> Executor<'a> {
 }
 
 fn about() -> impl Future<Item = Cow<'static, str>, Error = Void> {
-    Ok(format!("{} {}", env!("CARGO_PKG_NAME"), super::VERSION).into()).into_future()
+    Ok(format!(
+        "{} {}\n{}",
+        env!("CARGO_PKG_NAME"),
+        super::VERSION,
+        env!("CARGO_PKG_HOMEPAGE")
+    ).into())
+        .into_future()
 }
