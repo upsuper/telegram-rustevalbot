@@ -1,8 +1,11 @@
+extern crate env_logger;
 extern crate futures;
 extern crate htmlescape;
 extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate log;
 #[macro_use]
 extern crate matches;
 extern crate percent_encoding;
@@ -22,7 +25,7 @@ use futures::unsync::oneshot;
 use futures::{Future, IntoFuture, Stream};
 use std::cell::RefCell;
 use std::env;
-use std::io::{Error as IOError, ErrorKind as IOErrorKind};
+use std::io::{Error as IOError, ErrorKind as IOErrorKind, Write};
 use std::rc::Rc;
 use telegram_bot::{
     Api, CanSendMessage, Error, GetMe, GetUpdates, MessageChat, MessageKind, ParseMode, Update,
@@ -46,17 +49,48 @@ lazy_static! {
             .and_then(|s| str::parse(&s).map(UserId::new).ok());
 }
 
+fn init_logger() {
+    let env = env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info");
+    env_logger::Builder::from_env(env)
+        .format(|buf, record| {
+            let timestamp = buf.timestamp();
+            let write_header = write!(buf, "{:>5} {}: ", record.level(), timestamp);
+            let write_module_path = match record.module_path() {
+                None => Ok(()),
+                Some(mut module_path) => {
+                    const THIS_MODULE: &str = module_path!();
+                    if module_path.starts_with(THIS_MODULE) {
+                        let stripped = &module_path[THIS_MODULE.len()..];
+                        if stripped.is_empty() || stripped.starts_with("::") {
+                            module_path = stripped;
+                        }
+                    }
+                    if module_path.is_empty() {
+                        Ok(())
+                    } else {
+                        write!(buf, "{}: ", module_path)
+                    }
+                }
+            };
+            let write_args = writeln!(buf, "{}", record.args());
+            write_header.and(write_module_path).and(write_args)
+        })
+        .init();
+}
+
 fn main() -> Result<(), Error> {
+    init_logger();
+
     let mut core = Core::new()?;
     let token = env::var("TELEGRAM_TOKEN").expect("TELEGRAM_TOKEN must be set!");
-    println!("Running as `{}`", USER_AGENT);
+    info!("Running as `{}`", USER_AGENT);
 
     let handle = core.handle();
     // Configure Telegram API and get user information of ourselves
     let api = Api::configure(token).build(&handle)?;
     let self_user = core.run(api.send(GetMe))?;
     let self_username = self_user.username.expect("No username?");
-    println!("Authorized as @{}", self_username);
+    info!("Authorized as @{}", self_username);
     // Build the command executor
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let executor = command::Executor::new(&handle, &self_username, shutdown_sender);
@@ -67,6 +101,7 @@ fn main() -> Result<(), Error> {
     let api_to_move = api.clone();
     let counter_to_move = counter.clone();
     let stream = api.stream().for_each(move |update| {
+        debug!("{:?}", update);
         let api = api_to_move.clone();
         let future = handle_update(api, &executor, update);
         let counter = &counter_to_move;
@@ -96,9 +131,9 @@ fn main() -> Result<(), Error> {
     // Start exiting
     let mut get_updates = GetUpdates::new();
     get_updates.offset(shutdown_id + 1);
-    println!("{}> confirming", shutdown_id);
+    info!("{}> confirming", shutdown_id);
     core.run(api.send(get_updates).and_then(move |_| {
-        println!("{}> confirmed", shutdown_id);
+        info!("{}> confirmed", shutdown_id);
         api.send(ADMIN_ID.unwrap().text("bye"))
     })).map(|_| ())
 }
@@ -120,7 +155,7 @@ fn handle_update(
     let id = update.id;
     let username = message.from.username.unwrap_or(String::new());
     let user_id = message.from.id;
-    println!(
+    info!(
         "{}> received from {}({}): {}",
         id, username, user_id, command
     );
@@ -135,17 +170,17 @@ fn handle_update(
     };
     Either::B(executor.execute(cmd).and_then(move |reply| {
         let reply = reply.trim_matches(utils::is_separator);
-        println!("{}> sending: {}", id, reply);
+        info!("{}> sending: {}", id, reply);
         let mut msg = chat.text(reply);
         msg.parse_mode(ParseMode::Html);
         msg.disable_preview();
         api.send(msg)
             .and_then(move |_| {
-                println!("{}> sent", id);
+                info!("{}> sent", id);
                 Ok(())
             })
             .map_err(move |err| {
-                println!("{}> error: {:?}", id, err);
+                info!("{}> error: {:?}", id, err);
             })
     }))
 }

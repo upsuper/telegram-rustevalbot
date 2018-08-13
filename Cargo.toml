@@ -6,10 +6,12 @@ license = "MIT"
 homepage = "https://github.com/upsuper/telegram-rustevalbot"
 
 [dependencies]
+env_logger = "0.5"
+futures = "0.1"
 htmlescape = "0.3"
 itertools = "0.7"
-futures = "0.1"
 lazy_static = "1.1"
+log = "0.4"
 matches = "0.1"
 percent-encoding = "1.0"
 regex = "1.0"
