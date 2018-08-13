@@ -8,6 +8,7 @@ use utils;
 lazy_static! {
     static ref RE_ERROR: Regex = Regex::new(r"^error\[(E\d{4})\]:").unwrap();
     static ref RE_CODE: Regex = Regex::new(r"`(.+?)`").unwrap();
+    static ref RE_ISSUE: Regex = Regex::new(r"\(see issue #(\d+)\)").unwrap();
 }
 
 pub fn run(client: &Client, param: &str) -> impl Future<Item = String, Error = &'static str> {
@@ -82,6 +83,11 @@ pub fn run(client: &Client, param: &str) -> impl Future<Item = String, Error = &
                 });
                 let line = RE_CODE.replace_all(&line, |captures: &Captures| {
                     format!("<code>{}</code>", captures.get(1).unwrap().as_str())
+                });
+                let line = RE_ISSUE.replacen(&line, 1, |captures: &Captures| {
+                    let issue_num = captures.get(1).unwrap().as_str();
+                    let url = format!("https://github.com/rust-lang/rust/issues/{}", issue_num);
+                    format!(r#"(see issue <a href="{}">#{}</a>)"#, url, issue_num)
                 });
                 return Ok(format!("{}", line));
             }
