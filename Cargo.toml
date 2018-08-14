@@ -20,6 +20,7 @@ serde = "1.0"
 serde_derive = "1.0"
 telegram-bot = "0.6"
 tokio-core = "0.1"
+unicode-width = "0.1"
 
 [build-dependencies]
 git-version = "0.2"

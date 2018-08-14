@@ -16,6 +16,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate telegram_bot;
 extern crate tokio_core;
+extern crate unicode_width;
 
 mod command;
 mod utils;

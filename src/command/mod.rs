@@ -77,7 +77,7 @@ impl<'a> Executor<'a> {
         if let Some(info) = self.parse_command(cmd.command) {
             match info.name {
                 "/crate" => execute!(crate_::run(&self.client, info.args)),
-                "/eval" => execute!(eval::run(&self.client, info.args)),
+                "/eval" => execute!(eval::run(&self.client, cmd.is_private, info.args)),
                 "/rustc_version" => execute!(version::run(&self.client, info.args)),
                 _ => {}
             }
