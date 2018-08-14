@@ -157,7 +157,7 @@ fn handle_update(
     let username = message.from.username.unwrap_or(String::new());
     let user_id = message.from.id;
     info!(
-        "{}> received from {}({}): {}",
+        "{}> received from {}({}): {:?}",
         id, username, user_id, command
     );
     let is_admin = ADMIN_ID.as_ref().map_or(false, |id| &user_id == id);
@@ -171,7 +171,7 @@ fn handle_update(
     };
     Either::B(executor.execute(cmd).and_then(move |reply| {
         let reply = reply.trim_matches(utils::is_separator);
-        info!("{}> sending: {}", id, reply);
+        info!("{}> sending: {:?}", id, reply);
         let mut msg = chat.text(reply);
         msg.parse_mode(ParseMode::Html);
         msg.disable_preview();
