@@ -1,8 +1,8 @@
 use futures::Future;
 use htmlescape::{encode_attribute, encode_minimal};
-use std::borrow::Cow;
 use regex::{Captures, Regex};
 use reqwest::unstable::async::Client;
+use std::borrow::Cow;
 use unicode_width::UnicodeWidthChar;
 
 use utils;
@@ -13,7 +13,11 @@ lazy_static! {
     static ref RE_ISSUE: Regex = Regex::new(r"\(see issue #(\d+)\)").unwrap();
 }
 
-pub fn run(client: &Client, is_private: bool, param: &str) -> impl Future<Item = String, Error = &'static str> {
+pub fn run(
+    client: &Client,
+    is_private: bool,
+    param: &str,
+) -> impl Future<Item = String, Error = &'static str> {
     let mut body = param;
     let mut channel = None;
     let mut edition = None;

@@ -1,9 +1,9 @@
-use futures::{Future, IntoFuture};
 use futures::future::Either;
+use futures::{Future, IntoFuture};
 use telegram_bot::{Api, CanSendMessage, MessageChat, MessageKind, ParseMode, Update, UpdateKind};
 
-use command::{Command, Executor};
 use super::ADMIN_ID;
+use command::{Command, Executor};
 use utils;
 
 /// Processor for handling updates from Telegram.
