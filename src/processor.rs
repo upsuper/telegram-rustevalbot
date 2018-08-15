@@ -66,7 +66,7 @@ impl<'a> Processor<'a> {
                     Ok(())
                 })
                 .map_err(move |err| {
-                    info!("{}> error: {:?}", id, err);
+                    warn!("{}> error: {:?}", id, err);
                 })
         }))
     }
@@ -114,7 +114,7 @@ impl<'a> Processor<'a> {
                             Ok(())
                         })
                         .map_err(move |err| {
-                            info!("{}> error: {:?}", id, err);
+                            warn!("{}> error: {:?}", id, err);
                         }),
                 )
             }
@@ -134,7 +134,7 @@ impl<'a> Processor<'a> {
                             Ok(())
                         })
                         .map_err(move |err| {
-                            info!("{}> error: {:?}", id, err);
+                            warn!("{}> error: {:?}", id, err);
                         }),
                 )
             }
