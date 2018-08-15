@@ -19,19 +19,17 @@ extern crate tokio_core;
 extern crate unicode_width;
 
 mod command;
+mod processor;
 mod utils;
 
 use futures::future::Either;
 use futures::unsync::oneshot;
-use futures::{Future, IntoFuture, Stream};
+use futures::{Future, Stream};
 use std::cell::RefCell;
 use std::env;
 use std::io::{Error as IOError, ErrorKind as IOErrorKind, Write};
 use std::rc::Rc;
-use telegram_bot::{
-    Api, CanSendMessage, Error, GetMe, GetUpdates, MessageChat, MessageKind, ParseMode, Update,
-    UpdateKind, UserId,
-};
+use telegram_bot::{Api, CanSendMessage, Error, GetMe, GetUpdates, UserId};
 use tokio_core::reactor::Core;
 
 const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("VERSION"), ")",);
@@ -95,16 +93,15 @@ fn main() -> Result<(), Error> {
     // Build the command executor
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let executor = command::Executor::new(&handle, &self_username, shutdown_sender);
+    let processor = processor::Processor::new(api.clone(), executor);
     if let Some(id) = &*ADMIN_ID {
         api.spawn(id.text(format!("Start version: {} @{}", VERSION, self_username)));
     }
     let counter = Rc::new(RefCell::new(0));
-    let api_to_move = api.clone();
     let counter_to_move = counter.clone();
     let stream = api.stream().for_each(move |update| {
         debug!("{:?}", update);
-        let api = api_to_move.clone();
-        let future = handle_update(api, &executor, update);
+        let future = processor.handle_update(update);
         let counter = &counter_to_move;
         let counter_clone = counter.clone();
         *counter.borrow_mut() += 1;
@@ -137,51 +134,4 @@ fn main() -> Result<(), Error> {
         info!("{}> confirmed", shutdown_id);
         api.send(ADMIN_ID.unwrap().text("bye"))
     })).map(|_| ())
-}
-
-fn handle_update(
-    api: Api,
-    executor: &command::Executor,
-    update: Update,
-) -> impl Future<Item = (), Error = ()> {
-    let message = match update.kind {
-        UpdateKind::Message(message) => message,
-        _ => return Either::A(Ok(()).into_future()),
-    };
-    let command = match message.kind {
-        MessageKind::Text { ref data, .. } => data,
-        _ => return Either::A(Ok(()).into_future()),
-    };
-
-    let id = update.id;
-    let username = message.from.username.unwrap_or(String::new());
-    let user_id = message.from.id;
-    info!(
-        "{}> received from {}({}): {:?}",
-        id, username, user_id, command
-    );
-    let is_admin = ADMIN_ID.as_ref().map_or(false, |id| &user_id == id);
-    let chat = message.chat;
-    let is_private = matches!(chat, MessageChat::Private(..));
-    let cmd = command::Command {
-        id,
-        command,
-        is_admin,
-        is_private,
-    };
-    Either::B(executor.execute(cmd).and_then(move |reply| {
-        let reply = reply.trim_matches(utils::is_separator);
-        info!("{}> sending: {:?}", id, reply);
-        let mut msg = chat.text(reply);
-        msg.parse_mode(ParseMode::Html);
-        msg.disable_preview();
-        api.send(msg)
-            .and_then(move |_| {
-                info!("{}> sent", id);
-                Ok(())
-            })
-            .map_err(move |err| {
-                info!("{}> error: {:?}", id, err);
-            })
-    }))
 }
