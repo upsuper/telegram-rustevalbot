@@ -1,6 +1,6 @@
-use futures::future::Either;
 use futures::{Future, IntoFuture};
-use telegram_bot::{Api, CanSendMessage, MessageChat, MessageKind, ParseMode, Update, UpdateKind};
+use telegram_bot::{Api, CanSendMessage, Message, MessageChat, MessageKind};
+use telegram_bot::{ParseMode, Update, UpdateKind};
 
 use super::ADMIN_ID;
 use command::{Command, Executor};
@@ -19,17 +19,24 @@ impl<'a> Processor<'a> {
     }
 
     /// Handle the update.
-    pub fn handle_update(&self, update: Update) -> impl Future<Item = (), Error = ()> {
-        let message = match update.kind {
-            UpdateKind::Message(message) => message,
-            _ => return Either::A(Ok(()).into_future()),
-        };
+    pub fn handle_update(&mut self, update: Update) -> Box<dyn Future<Item = (), Error = ()>> {
+        let id = update.id;
+        match update.kind {
+            UpdateKind::Message(message) => self.handle_message(id, message),
+            _ => Box::new(Ok(()).into_future()),
+        }
+    }
+
+    fn handle_message(
+        &mut self,
+        id: i64,
+        message: Message,
+    ) -> Box<dyn Future<Item = (), Error = ()>> {
         let command = match message.kind {
             MessageKind::Text { ref data, .. } => data,
-            _ => return Either::A(Ok(()).into_future()),
+            _ => return Box::new(Ok(()).into_future()),
         };
 
-        let id = update.id;
         let username = message.from.username.unwrap_or(String::new());
         let user_id = message.from.id;
         info!(
@@ -46,7 +53,7 @@ impl<'a> Processor<'a> {
             is_private,
         };
         let api = self.api.clone();
-        Either::B(self.executor.execute(cmd).and_then(move |reply| {
+        Box::new(self.executor.execute(cmd).and_then(move |reply| {
             let reply = reply.trim_matches(utils::is_separator);
             info!("{}> sending: {:?}", id, reply);
             let mut msg = chat.text(reply);

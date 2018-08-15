@@ -93,7 +93,7 @@ fn main() -> Result<(), Error> {
     // Build the command executor
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let executor = command::Executor::new(&handle, &self_username, shutdown_sender);
-    let processor = processor::Processor::new(api.clone(), executor);
+    let mut processor = processor::Processor::new(api.clone(), executor);
     if let Some(id) = &*ADMIN_ID {
         api.spawn(id.text(format!("Start version: {} @{}", VERSION, self_username)));
     }
