@@ -1,6 +1,11 @@
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::rc::Rc;
+
+use futures::future::Either;
 use futures::{Future, IntoFuture};
-use telegram_bot::{Api, CanSendMessage, Message, MessageChat, MessageKind};
-use telegram_bot::{ParseMode, Update, UpdateKind};
+use telegram_bot::{Api, CanSendMessage, DeleteMessage, EditMessageText};
+use telegram_bot::{Message, MessageChat, MessageId, MessageKind, ParseMode, Update, UpdateKind};
 
 use super::ADMIN_ID;
 use command::{Command, Executor};
@@ -10,49 +15,43 @@ use utils;
 pub struct Processor<'a> {
     api: Api,
     executor: Executor<'a>,
+    records: Rc<RefCell<VecDeque<Record>>>,
 }
 
 impl<'a> Processor<'a> {
     /// Create new Processor.
     pub fn new(api: Api, executor: Executor<'a>) -> Self {
-        Processor { api, executor }
+        Processor {
+            api,
+            executor,
+            records: Rc::new(RefCell::new(VecDeque::new())),
+        }
     }
 
     /// Handle the update.
-    pub fn handle_update(&mut self, update: Update) -> Box<dyn Future<Item = (), Error = ()>> {
+    pub fn handle_update(&self, update: Update) -> Box<dyn Future<Item = (), Error = ()>> {
         let id = update.id;
         match update.kind {
             UpdateKind::Message(message) => self.handle_message(id, message),
+            UpdateKind::EditedMessage(message) => self.handle_edit_message(id, message),
             _ => Box::new(Ok(()).into_future()),
         }
     }
 
-    fn handle_message(
-        &mut self,
-        id: i64,
-        message: Message,
-    ) -> Box<dyn Future<Item = (), Error = ()>> {
-        let command = match message.kind {
-            MessageKind::Text { ref data, .. } => data,
-            _ => return Box::new(Ok(()).into_future()),
+    fn handle_message(&self, id: i64, message: Message) -> Box<dyn Future<Item = (), Error = ()>> {
+        self.clean_old_records(message.date);
+        let cmd = match Self::build_command(id, &message) {
+            Ok(cmd) => cmd,
+            Err(()) => return Box::new(Ok(()).into_future()),
         };
-
-        let username = message.from.username.unwrap_or(String::new());
-        let user_id = message.from.id;
-        info!(
-            "{}> received from {}({}): {:?}",
-            id, username, user_id, command
-        );
-        let is_admin = ADMIN_ID.as_ref().map_or(false, |id| &user_id == id);
-        let chat = message.chat;
-        let is_private = matches!(chat, MessageChat::Private(..));
-        let cmd = Command {
-            id,
-            command,
-            is_admin,
-            is_private,
+        let mut record = Record {
+            msg: message.id,
+            reply: None,
+            date: message.date,
         };
+        let chat = message.chat.clone();
         let api = self.api.clone();
+        let records = self.records.clone();
         Box::new(self.executor.execute(cmd).and_then(move |reply| {
             let reply = reply.trim_matches(utils::is_separator);
             info!("{}> sending: {:?}", id, reply);
@@ -60,8 +59,10 @@ impl<'a> Processor<'a> {
             msg.parse_mode(ParseMode::Html);
             msg.disable_preview();
             api.send(msg)
-                .and_then(move |_| {
-                    info!("{}> sent", id);
+                .and_then(move |reply| {
+                    info!("{}> sent as {}", id, reply.id);
+                    record.reply = Some(reply.id);
+                    records.borrow_mut().push_back(record);
                     Ok(())
                 })
                 .map_err(move |err| {
@@ -69,4 +70,121 @@ impl<'a> Processor<'a> {
                 })
         }))
     }
+
+    fn handle_edit_message(
+        &self,
+        id: i64,
+        message: Message,
+    ) -> Box<dyn Future<Item = (), Error = ()>> {
+        let cmd = match Self::build_command(id, &message) {
+            Ok(cmd) => cmd,
+            // XXX Can this happen at all? Can a text message becomes other types?
+            Err(()) => return Box::new(Ok(()).into_future()),
+        };
+        let msg_id = message.id;
+        let reply_id = self
+            .records
+            .borrow()
+            .iter()
+            .rev()
+            .find(|r| r.msg == msg_id)
+            .and_then(|r| r.reply);
+        let reply_id = match reply_id {
+            Some(reply) => reply,
+            None => {
+                warn!("{}> reply not found", id);
+                return Box::new(Ok(()).into_future());
+            }
+        };
+
+        let chat = message.chat.clone();
+        let api = self.api.clone();
+        let records = self.records.clone();
+        Box::new(self.executor.execute(cmd).then(move |reply| match reply {
+            Ok(reply) => {
+                let reply = reply.trim_matches(utils::is_separator);
+                info!("{}> updating: {:?}", id, reply);
+                let mut msg = EditMessageText::new(chat, reply_id, reply);
+                msg.parse_mode(ParseMode::Html);
+                msg.disable_preview();
+                Either::A(
+                    api.send(msg)
+                        .and_then(move |_| {
+                            info!("{}> updated", id);
+                            Ok(())
+                        })
+                        .map_err(move |err| {
+                            info!("{}> error: {:?}", id, err);
+                        }),
+                )
+            }
+            Err(()) => {
+                let delete = DeleteMessage::new(chat, reply_id);
+                info!("{}> deleting", id);
+                records
+                    .borrow_mut()
+                    .iter_mut()
+                    .rev()
+                    .find(|r| r.msg == msg_id)
+                    .map(|r| r.reply = None);
+                Either::B(
+                    api.send(delete)
+                        .and_then(move |_| {
+                            info!("{}> deleted", id);
+                            Ok(())
+                        })
+                        .map_err(move |err| {
+                            info!("{}> error: {:?}", id, err);
+                        }),
+                )
+            }
+        }))
+    }
+
+    fn build_command(id: i64, message: &Message) -> Result<Command, ()> {
+        let command = match message.kind {
+            MessageKind::Text { ref data, .. } => data,
+            _ => return Err(()),
+        };
+
+        let username = message
+            .from
+            .username
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("");
+        let user_id = message.from.id;
+        info!(
+            "{}> received from {}({}): [{}] {:?}",
+            id, username, user_id, message.id, command
+        );
+        let is_admin = ADMIN_ID.as_ref().map_or(false, |id| &user_id == id);
+        let is_private = matches!(message.chat, MessageChat::Private(..));
+        Ok(Command {
+            id,
+            command,
+            is_admin,
+            is_private,
+        })
+    }
+
+    fn clean_old_records(&self, current_date: i64) {
+        // We can clean up records up to 48hrs ago, because messages before that cannot be
+        // edited anymore.
+        let date_to_clean = current_date - 48 * 3600;
+        let mut records = self.records.borrow_mut();
+        while let Some(record) = records.pop_front() {
+            if record.date > date_to_clean {
+                records.push_front(record);
+                break;
+            }
+        }
+    }
+}
+
+struct Record {
+    msg: MessageId,
+    reply: Option<MessageId>,
+    /// Same as Message::date, a UNIX epoch in seconds.
+    date: i64,
 }
