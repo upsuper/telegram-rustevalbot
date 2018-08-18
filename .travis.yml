@@ -11,7 +11,13 @@ script:
   - cargo build --release --verbose
   - cargo test --release --verbose
 
+addons:
+  apt:
+    packages:
+      - sshpass
+
 after_success:
-  - curl sftp://${SFTP_USERNAME}:${SFTP_PASSWORD}@${SFTP_SERVER}:${SFTP_PORT}/~/
-      --quote "rm telegram-rustevalbot"
-      -T target/release/telegram-rustevalbot
+  - sshpass -p${SFTP_PASSWORD}
+    sftp -b ci/deploy.sftp
+         -P ${SFTP_PORT}
+         ${SFTP_USERNAME}@${SFTP_SERVER}

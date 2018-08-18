@@ -1,0 +1,2 @@
+-rm telegram-rustevalbot
+put target/release/telegram-rustevalbot
