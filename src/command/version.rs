@@ -22,12 +22,7 @@ pub fn run(client: &Client, param: &str) -> Box<Future<Item = String, Error = &'
         .send()
         .and_then(|resp| resp.error_for_status())
         .and_then(|mut resp| resp.json())
-        .and_then(|resp: Version| {
-            Ok(format!(
-                "rustc {} ({:.9} {})",
-                resp.version, resp.hash, resp.date
-            ))
-        })
+        .map(|resp: Version| format!("rustc {} ({:.9} {})", resp.version, resp.hash, resp.date))
         .map_err(utils::map_reqwest_error);
     Box::new(future)
 }

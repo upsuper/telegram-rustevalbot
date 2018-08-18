@@ -61,14 +61,14 @@ pub fn run(
         .send()
         .and_then(|resp| resp.error_for_status())
         .and_then(|mut resp| resp.json())
-        .and_then(move |resp: Response| {
+        .map(move |resp: Response| {
             if resp.success {
                 let output = resp.stdout.trim();
                 let output = match is_private {
                     true => output.into(),
                     false => truncate_output(output),
                 };
-                return Ok(format!("<pre>{}</pre>", encode_minimal(&output)));
+                return format!("<pre>{}</pre>", encode_minimal(&output));
             }
             for line in resp.stderr.split('\n') {
                 let line = line.trim();
@@ -100,9 +100,9 @@ pub fn run(
                     let url = format!("https://github.com/rust-lang/rust/issues/{}", issue_num);
                     format!(r#"(see issue <a href="{}">#{}</a>)"#, url, issue_num)
                 });
-                return Ok(format!("{}", line));
+                return format!("{}", line);
             }
-            Ok("(nothing??)".to_string())
+            "(nothing??)".to_string()
         })
         .map_err(utils::map_reqwest_error)
 }

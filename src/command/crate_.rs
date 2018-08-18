@@ -17,7 +17,7 @@ pub fn run(client: &Client, param: &str) -> impl Future<Item = String, Error = &
         .send()
         .and_then(|resp| resp.error_for_status())
         .and_then(|mut resp| resp.json())
-        .and_then(|resp: Info| {
+        .map(|resp: Info| {
             let info = resp.crate_;
             let urlname = utf8_percent_encode(&info.name, PATH_SEGMENT_ENCODE_SET);
             let crate_url = format!("https://crates.io/crates/{}", urlname);
@@ -44,7 +44,7 @@ pub fn run(client: &Client, param: &str) -> impl Future<Item = String, Error = &
             message.push_str(" - ");
             let description = info.description.split_whitespace().join(" ");
             message.push_str(&encode_minimal(&description));
-            Ok(message)
+            message
         })
         .map_err(utils::map_reqwest_error)
 }

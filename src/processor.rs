@@ -109,9 +109,8 @@ impl<'a> Processor<'a> {
                 msg.disable_preview();
                 Either::A(
                     api.send(msg)
-                        .and_then(move |_| {
+                        .map(move |_| {
                             info!("{}> updated", id);
-                            Ok(())
                         })
                         .map_err(move |err| {
                             warn!("{}> error: {:?}", id, err);
@@ -129,9 +128,8 @@ impl<'a> Processor<'a> {
                     .map(|r| r.reply = None);
                 Either::B(
                     api.send(delete)
-                        .and_then(move |_| {
+                        .map(move |_| {
                             info!("{}> deleted", id);
-                            Ok(())
                         })
                         .map_err(move |err| {
                             warn!("{}> error: {:?}", id, err);
