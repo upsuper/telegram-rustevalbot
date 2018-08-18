@@ -15,7 +15,9 @@ addons:
   apt:
     packages:
       - sshpass
-  ssh_known_hosts: vps9.upsuper.org:2222
+  ssh_known_hosts:
+    - vps9.upsuper.org:2222
+    - 192.241.222.156:2222
 
 after_success:
   - sshpass -p${SFTP_PASSWORD}
@@ -23,3 +25,9 @@ after_success:
          -b ci/deploy.sftp
          -P ${SFTP_PORT}
          ${SFTP_USERNAME}@${SFTP_SERVER}
+
+notifications:
+  email:
+    recipients:
+      - travis-ci@upsuper.org
+    on_success: always
