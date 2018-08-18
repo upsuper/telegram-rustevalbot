@@ -1,0 +1,17 @@
+language: rust
+
+rust:
+  - stable
+
+cache: cargo
+
+script:
+  - cargo build --verbose
+  - cargo test --verbose
+  - cargo build --release --verbose
+  - cargo test --release --verbose
+
+after_success:
+  - curl sftp://${SFTP_USERNAME}:${SFTP_PASSWORD}@${SFTP_SERVER}:${SFTP_PORT}/~/
+      --quote "rm telegram-rustevalbot"
+      -T target/release/telegram-rustevalbot
