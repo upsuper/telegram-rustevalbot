@@ -15,6 +15,7 @@ addons:
   apt:
     packages:
       - sshpass
+  ssh_known_hosts: vps9.upsuper.org:2222
 
 after_success:
   - sshpass -p${SFTP_PASSWORD}
