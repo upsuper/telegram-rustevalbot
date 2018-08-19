@@ -1,2 +1,2 @@
 -rm telegram-rustevalbot
-put target/release/telegram-rustevalbot
+put /tmp/telegram-rustevalbot
