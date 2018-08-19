@@ -9,9 +9,8 @@ use reqwest::header::{Headers, UserAgent};
 use reqwest::unstable::async::Client;
 use std::borrow::Cow;
 use std::cell::Cell;
-use std::fmt::Display;
 use tokio_core::reactor::Handle;
-use utils::{is_separator, Void};
+use utils::is_separator;
 
 /// Command executor.
 pub struct Executor<'a> {
@@ -43,6 +42,7 @@ struct CommandInfo<'a> {
 struct ExecutionContext<'a> {
     client: &'a Client,
     is_private: bool,
+    is_specific: bool,
     args: &'a str,
 }
 
@@ -68,41 +68,23 @@ impl<'a> Executor<'a> {
     /// Future resolves to a message to send back. If nothing can be
     /// replied, it rejects.
     pub fn execute(&self, cmd: Command) -> Box<Future<Item = Cow<'static, str>, Error = ()>> {
-        fn reply(
-            reply: Result<impl Into<Cow<'static, str>>, impl Display>,
-        ) -> Result<Cow<'static, str>, ()> {
-            Ok(match reply {
-                Ok(reply) => reply.into(),
-                Err(err) => format!("error: {}", err).into(),
-            })
-        }
-        macro_rules! execute {
-            ($future:expr) => {
-                return Box::new($future.then(reply));
-            };
-        }
         if let Some(info) = self.parse_command(cmd.command) {
             let context = ExecutionContext {
                 client: &self.client,
                 is_private: cmd.is_private,
+                is_specific: cmd.is_private || info.at_self,
                 args: info.args,
             };
-            match info.name {
-                "/crate" => execute!(crate_::run(context)),
-                "/eval" => execute!(eval::run(context)),
-                "/rustc_version" => execute!(version::run(context)),
-                _ => {}
-            }
-            if cmd.is_private || info.at_self {
-                match info.name {
-                    "/version" => execute!(version::run(context)),
-                    "/about" => execute!(about::run(context)),
-                    _ => {}
-                }
+            match execute_command(info.name, context) {
+                Some(result) => return result,
+                None => {}
             }
             if cmd.is_private && cmd.is_admin {
                 match info.name {
-                    "/shutdown" => execute!(self.shutdown(cmd.id)),
+                    "/shutdown" => {
+                        self.shutdown.replace(None).unwrap().send(cmd.id).unwrap();
+                        return Box::new(Ok("start shutting down...".into()).into_future());
+                    }
                     _ => {}
                 }
             }
@@ -130,9 +112,65 @@ impl<'a> Executor<'a> {
             at_self,
         })
     }
+}
 
-    fn shutdown(&self, id: i64) -> impl Future<Item = Cow<'static, str>, Error = Void> {
-        self.shutdown.replace(None).unwrap().send(id).unwrap();
-        Ok("start shutting down...".into()).into_future()
+macro_rules! commands {
+    {
+        general: [
+            $($cmd_g:expr => $mod_g:ident / $desc_g:expr,)+
+        ];
+        specific: [
+            $($cmd_s:expr => $mod_s:ident / $desc_s:expr,)+
+        ];
+    } => {
+        fn display_help(is_private: bool) -> &'static str {
+            if is_private {
+                concat!(
+                    $("<code>", $cmd_g, "</code> - ", $desc_g, "\n",)+
+                    $("<code>", $cmd_s, "</code> - ", $desc_s, "\n",)+
+                    "<code>/help</code> - show this information",
+                )
+            } else {
+                concat!(
+                    $("<code>", $cmd_g, "</code> - ", $desc_g, "\n",)+
+                )
+            }
+        }
+
+        fn execute_command(
+            name: &str,
+            ctx: ExecutionContext
+        ) -> Option<Box<Future<Item = Cow<'static, str>, Error = ()>>> {
+            macro_rules! execute_mod {
+                ($mod:ident) => {{
+                    Some(Box::new($mod::run(ctx).then(|reply| {
+                        Ok(match reply {
+                            Ok(reply) => reply.into(),
+                            Err(err) => format!("error: {}", err).into(),
+                        })
+                    })))
+                }}
+            }
+            match name {
+                $($cmd_g => execute_mod!($mod_g),)+
+                $($cmd_s if ctx.is_specific => execute_mod!($mod_s),)+
+                "/help" if ctx.is_specific => {
+                    Some(Box::new(Ok(display_help(ctx.is_private).into()).into_future()))
+                }
+                _ => None
+            }
+        }
     }
+}
+
+commands! {
+    general: [
+        "/crate" => crate_ / "query crate information",
+        "/eval" => eval / "evaluate a piece of Rust code",
+        "/rustc_version" => version / "display rustc version being used",
+    ];
+    specific: [
+        "/version" => version / "display rustc version being used",
+        "/about" => about / "display information about this bot",
+    ];
 }
