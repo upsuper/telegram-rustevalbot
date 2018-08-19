@@ -14,7 +14,7 @@ script:
   - rm -rf target/{debug,release}/{,lib}telegram-rustevalbot*
   - rm -rf target/{debug,release}/{build,deps,.fingerprint}/telegram-rustevalbot-*
   - rm -rf target/*/{release,debug}/.fingerprint/telegram-rustevalbot-*
-  - rm -rf target/debug/incremental/telegram-rustevalbot-*
+  - rm -rf target/debug/incremental
 
 addons:
   apt:
