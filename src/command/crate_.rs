@@ -2,16 +2,16 @@ use futures::Future;
 use htmlescape::{encode_attribute, encode_minimal};
 use itertools::Itertools;
 use percent_encoding::{utf8_percent_encode, PATH_SEGMENT_ENCODE_SET};
-use reqwest::unstable::async::Client;
 use reqwest::StatusCode;
 
+use super::ExecutionContext;
 use utils;
 
-pub fn run(client: &Client, param: &str) -> impl Future<Item = String, Error = &'static str> {
-    let name = param.trim().to_string();
+pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
+    let name = ctx.args.trim().to_string();
     let name_url = utf8_percent_encode(&name, PATH_SEGMENT_ENCODE_SET).collect::<String>();
     let url = format!("https://crates.io/api/v1/crates/{}", name_url);
-    client
+    ctx.client
         .get(&url)
         .send()
         .and_then(|resp| resp.error_for_status())

@@ -39,6 +39,12 @@ struct CommandInfo<'a> {
     at_self: bool,
 }
 
+struct ExecutionContext<'a> {
+    client: &'a Client,
+    is_private: bool,
+    args: &'a str,
+}
+
 impl<'a> Executor<'a> {
     /// Create new command executor.
     pub fn new(handle: &Handle, username: &'a str, shutdown: oneshot::Sender<i64>) -> Self {
@@ -75,15 +81,20 @@ impl<'a> Executor<'a> {
             };
         }
         if let Some(info) = self.parse_command(cmd.command) {
+            let context = ExecutionContext {
+                client: &self.client,
+                is_private: cmd.is_private,
+                args: info.args,
+            };
             match info.name {
-                "/crate" => execute!(crate_::run(&self.client, info.args)),
-                "/eval" => execute!(eval::run(&self.client, cmd.is_private, info.args)),
-                "/rustc_version" => execute!(version::run(&self.client, info.args)),
+                "/crate" => execute!(crate_::run(context)),
+                "/eval" => execute!(eval::run(context)),
+                "/rustc_version" => execute!(version::run(context)),
                 _ => {}
             }
             if cmd.is_private || info.at_self {
                 match info.name {
-                    "/version" => execute!(version::run(&self.client, info.args)),
+                    "/version" => execute!(version::run(context)),
                     "/about" => execute!(about()),
                     _ => {}
                 }

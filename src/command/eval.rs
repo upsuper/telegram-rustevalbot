@@ -1,10 +1,10 @@
 use futures::Future;
 use htmlescape::{encode_attribute, encode_minimal};
 use regex::{Captures, Regex};
-use reqwest::unstable::async::Client;
 use std::borrow::Cow;
 use unicode_width::UnicodeWidthChar;
 
+use super::ExecutionContext;
 use utils;
 
 lazy_static! {
@@ -13,12 +13,8 @@ lazy_static! {
     static ref RE_ISSUE: Regex = Regex::new(r"\(see issue #(\d+)\)").unwrap();
 }
 
-pub fn run(
-    client: &Client,
-    is_private: bool,
-    param: &str,
-) -> impl Future<Item = String, Error = &'static str> {
-    let mut body = param;
+pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
+    let mut body = ctx.args;
     let mut channel = None;
     let mut edition = None;
     let mut mode = None;
@@ -40,6 +36,7 @@ pub fn run(
         body = &body[flag.len()..];
     }
 
+    let is_private = ctx.is_private;
     let code = if bare {
         body.to_string()
     } else {
@@ -55,7 +52,7 @@ pub fn run(
         backtrace: false,
         code,
     };
-    client
+    ctx.client
         .post("https://play.rust-lang.org/execute")
         .json(&req)
         .send()

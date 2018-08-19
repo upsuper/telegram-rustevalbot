@@ -1,12 +1,12 @@
 use futures::{Future, IntoFuture};
-use reqwest::unstable::async::Client;
 
 use super::eval::Channel;
+use super::ExecutionContext;
 use utils;
 
-pub fn run(client: &Client, param: &str) -> Box<Future<Item = String, Error = &'static str>> {
+pub(super) fn run(ctx: ExecutionContext) -> Box<Future<Item = String, Error = &'static str>> {
     let mut channel = Channel::Stable;
-    match param.trim_matches(utils::is_separator) {
+    match ctx.args.trim_matches(utils::is_separator) {
         "" => {}
         "--stable" => channel = Channel::Stable,
         "--beta" => channel = Channel::Beta,
@@ -17,7 +17,8 @@ pub fn run(client: &Client, param: &str) -> Box<Future<Item = String, Error = &'
         "https://play.rust-lang.org/meta/version/{}",
         channel.as_str(),
     );
-    let future = client
+    let future = ctx
+        .client
         .get(&url)
         .send()
         .and_then(|resp| resp.error_for_status())
