@@ -39,16 +39,20 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
                     encode_attribute(&repo),
                 ));
             }
-            message.push_str(" - ");
-            let description = info.description.split_whitespace().join(" ");
-            message.push_str(&encode_minimal(&description));
+            if let Some(description) = info.description {
+                message.push_str(" - ");
+                let description = description.split_whitespace().join(" ");
+                message.push_str(&encode_minimal(&description));
+            }
             message
         })
         .or_else(move |err| match err.status() {
             Some(StatusCode::NotFound) => Ok(format!("<b>{}</b> - not found", name)),
-            _ => Err(err),
+            _ => {
+                warn!("{:?}", err);
+                Err(utils::map_reqwest_error(err))
+            }
         })
-        .map_err(utils::map_reqwest_error)
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,7 +65,7 @@ struct Info {
 struct Crate {
     id: String,
     name: String,
-    description: String,
+    description: Option<String>,
     max_version: String,
     documentation: Option<String>,
     repository: Option<String>,
