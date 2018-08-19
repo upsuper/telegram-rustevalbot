@@ -10,6 +10,9 @@ script:
   - cargo test --verbose
   - cargo build --release --verbose
   - cargo test --release --verbose
+  - rm -rf target/{debug,release}/{,lib}telegram-rustevalbot*
+  - rm -rf target/{debug,release}/{build,deps,.fingerprint}/telegram-rustevalbot-*
+  - rm -rf target/*/{release,debug}/.fingerprint/telegram-rustevalbot-*
 
 addons:
   apt:
