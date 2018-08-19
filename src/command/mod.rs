@@ -10,7 +10,7 @@ use reqwest::unstable::async::Client;
 use std::borrow::Cow;
 use std::cell::Cell;
 use tokio_core::reactor::Handle;
-use utils::is_separator;
+use utils::{is_separator, Void};
 
 /// Command executor.
 pub struct Executor<'a> {
@@ -46,6 +46,8 @@ struct ExecutionContext<'a> {
     args: &'a str,
 }
 
+type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void>>;
+
 impl<'a> Executor<'a> {
     /// Create new command executor.
     pub fn new(handle: &Handle, username: &'a str, shutdown: oneshot::Sender<i64>) -> Self {
@@ -67,7 +69,7 @@ impl<'a> Executor<'a> {
     ///
     /// Future resolves to a message to send back. If nothing can be
     /// replied, it rejects.
-    pub fn execute(&self, cmd: Command) -> Box<Future<Item = Cow<'static, str>, Error = ()>> {
+    pub fn execute(&self, cmd: Command) -> Option<BoxFutureStr> {
         if let Some(info) = self.parse_command(cmd.command) {
             let context = ExecutionContext {
                 client: &self.client,
@@ -76,20 +78,20 @@ impl<'a> Executor<'a> {
                 args: info.args,
             };
             match execute_command(info.name, context) {
-                Some(result) => return result,
+                Some(result) => return Some(result),
                 None => {}
             }
             if cmd.is_private && cmd.is_admin {
                 match info.name {
                     "/shutdown" => {
                         self.shutdown.replace(None).unwrap().send(cmd.id).unwrap();
-                        return Box::new(Ok("start shutting down...".into()).into_future());
+                        return Some(str_to_box_future("start shutting down..."));
                     }
                     _ => {}
                 }
             }
         }
-        Box::new(Err(()).into_future())
+        None
     }
 
     fn parse_command<'s>(&self, s: &'s str) -> Option<CommandInfo<'s>> {
@@ -112,6 +114,10 @@ impl<'a> Executor<'a> {
             at_self,
         })
     }
+}
+
+fn str_to_box_future(s: &'static str) -> BoxFutureStr {
+    Box::new(Ok(s.into()).into_future())
 }
 
 macro_rules! commands {
@@ -137,10 +143,7 @@ macro_rules! commands {
             }
         }
 
-        fn execute_command(
-            name: &str,
-            ctx: ExecutionContext
-        ) -> Option<Box<Future<Item = Cow<'static, str>, Error = ()>>> {
+        fn execute_command(name: &str, ctx: ExecutionContext) -> Option<BoxFutureStr> {
             macro_rules! execute_mod {
                 ($mod:ident) => {{
                     Some(Box::new($mod::run(ctx).then(|reply| {
@@ -155,7 +158,7 @@ macro_rules! commands {
                 $($cmd_g => execute_mod!($mod_g),)+
                 $($cmd_s if ctx.is_specific => execute_mod!($mod_s),)+
                 "/help" if ctx.is_specific => {
-                    Some(Box::new(Ok(display_help(ctx.is_private).into()).into_future()))
+                    Some(str_to_box_future(display_help(ctx.is_private)))
                 }
                 _ => None
             }

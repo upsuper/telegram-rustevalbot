@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use futures::future::Either;
 use futures::{Future, IntoFuture};
 use telegram_bot::{Api, CanSendMessage, DeleteMessage, EditMessageText};
 use telegram_bot::{Message, MessageChat, MessageId, MessageKind, ParseMode, Update, UpdateKind};
@@ -18,6 +17,8 @@ pub struct Processor<'a> {
     records: Rc<RefCell<VecDeque<Record>>>,
 }
 
+type BoxFuture = Box<dyn Future<Item = (), Error = ()>>;
+
 impl<'a> Processor<'a> {
     /// Create new Processor.
     pub fn new(api: Api, executor: Executor<'a>) -> Self {
@@ -29,7 +30,7 @@ impl<'a> Processor<'a> {
     }
 
     /// Handle the update.
-    pub fn handle_update(&self, update: Update) -> Box<dyn Future<Item = (), Error = ()>> {
+    pub fn handle_update(&self, update: Update) -> BoxFuture {
         let id = update.id;
         match update.kind {
             UpdateKind::Message(message) => self.handle_message(id, message),
@@ -38,7 +39,7 @@ impl<'a> Processor<'a> {
         }
     }
 
-    fn handle_message(&self, id: i64, message: Message) -> Box<dyn Future<Item = (), Error = ()>> {
+    fn handle_message(&self, id: i64, message: Message) -> BoxFuture {
         self.clean_old_records(message.date);
         let cmd = match Self::build_command(id, &message) {
             Ok(cmd) => cmd,
@@ -52,30 +53,27 @@ impl<'a> Processor<'a> {
         let chat = message.chat.clone();
         let api = self.api.clone();
         let records = self.records.clone();
-        Box::new(self.executor.execute(cmd).and_then(move |reply| {
-            let reply = reply.trim_matches(utils::is_separator);
-            info!("{}> sending: {:?}", id, reply);
-            let mut msg = chat.text(reply);
-            msg.parse_mode(ParseMode::Html);
-            msg.disable_preview();
-            api.send(msg)
-                .and_then(move |reply| {
-                    info!("{}> sent as {}", id, reply.id);
-                    record.reply = Some(reply.id);
-                    records.borrow_mut().push_back(record);
-                    Ok(())
-                })
-                .map_err(move |err| {
-                    warn!("{}> error: {:?}", id, err);
-                })
-        }))
+        match self.executor.execute(cmd) {
+            Some(future) => Box::new(future.then(move |reply| {
+                let reply = reply.unwrap();
+                let reply = reply.trim_matches(utils::is_separator);
+                info!("{}> sending: {:?}", id, reply);
+                let mut msg = chat.text(reply);
+                msg.parse_mode(ParseMode::Html);
+                msg.disable_preview();
+                api.send(msg)
+                    .map(move |reply| {
+                        info!("{}> sent as {}", id, reply.id);
+                        record.reply = Some(reply.id);
+                        records.borrow_mut().push_back(record);
+                    })
+                    .map_err(move |err| warn!("{}> error: {:?}", id, err))
+            })),
+            None => Box::new(Err(()).into_future()),
+        }
     }
 
-    fn handle_edit_message(
-        &self,
-        id: i64,
-        message: Message,
-    ) -> Box<dyn Future<Item = (), Error = ()>> {
+    fn handle_edit_message(&self, id: i64, message: Message) -> BoxFuture {
         let cmd = match Self::build_command(id, &message) {
             Ok(cmd) => cmd,
             // XXX Can this happen at all? Can a text message becomes other types?
@@ -100,24 +98,19 @@ impl<'a> Processor<'a> {
         let chat = message.chat.clone();
         let api = self.api.clone();
         let records = self.records.clone();
-        Box::new(self.executor.execute(cmd).then(move |reply| match reply {
-            Ok(reply) => {
+        match self.executor.execute(cmd) {
+            Some(future) => Box::new(future.then(move |reply| {
+                let reply = reply.unwrap();
                 let reply = reply.trim_matches(utils::is_separator);
                 info!("{}> updating: {:?}", id, reply);
                 let mut msg = EditMessageText::new(chat, reply_id, reply);
                 msg.parse_mode(ParseMode::Html);
                 msg.disable_preview();
-                Either::A(
-                    api.send(msg)
-                        .map(move |_| {
-                            info!("{}> updated", id);
-                        })
-                        .map_err(move |err| {
-                            warn!("{}> error: {:?}", id, err);
-                        }),
-                )
-            }
-            Err(()) => {
+                api.send(msg)
+                    .map(move |_| info!("{}> updated", id))
+                    .map_err(move |err| warn!("{}> error: {:?}", id, err))
+            })),
+            None => {
                 let delete = DeleteMessage::new(chat, reply_id);
                 info!("{}> deleting", id);
                 records
@@ -126,17 +119,13 @@ impl<'a> Processor<'a> {
                     .rev()
                     .find(|r| r.msg == msg_id)
                     .map(|r| r.reply = None);
-                Either::B(
+                Box::new(
                     api.send(delete)
-                        .map(move |_| {
-                            info!("{}> deleted", id);
-                        })
-                        .map_err(move |err| {
-                            warn!("{}> error: {:?}", id, err);
-                        }),
+                        .map(move |_| info!("{}> deleted", id))
+                        .map_err(move |err| warn!("{}> error: {:?}", id, err)),
                 )
             }
-        }))
+        }
     }
 
     fn build_command(id: i64, message: &Message) -> Result<Command, ()> {
