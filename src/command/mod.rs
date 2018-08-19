@@ -1,3 +1,4 @@
+mod about;
 mod crate_;
 mod eval;
 mod version;
@@ -95,7 +96,7 @@ impl<'a> Executor<'a> {
             if cmd.is_private || info.at_self {
                 match info.name {
                     "/version" => execute!(version::run(context)),
-                    "/about" => execute!(about()),
+                    "/about" => execute!(about::run(context)),
                     _ => {}
                 }
             }
@@ -134,14 +135,4 @@ impl<'a> Executor<'a> {
         self.shutdown.replace(None).unwrap().send(id).unwrap();
         Ok("start shutting down...".into()).into_future()
     }
-}
-
-fn about() -> impl Future<Item = Cow<'static, str>, Error = Void> {
-    Ok(format!(
-        "{} {}\n{}",
-        env!("CARGO_PKG_NAME"),
-        super::VERSION,
-        env!("CARGO_PKG_HOMEPAGE")
-    ).into())
-        .into_future()
 }
