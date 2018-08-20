@@ -6,6 +6,7 @@ license = "MIT"
 homepage = "https://github.com/upsuper/telegram-rustevalbot"
 
 [dependencies]
+dotenv = "0.13"
 env_logger = "0.5"
 futures = "0.1"
 htmlescape = "0.3"

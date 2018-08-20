@@ -1,3 +1,4 @@
+extern crate dotenv;
 extern crate env_logger;
 extern crate futures;
 extern crate htmlescape;
@@ -78,6 +79,8 @@ fn init_logger() {
 }
 
 fn main() -> Result<(), Error> {
+    // We don't care if we fail to load .env file.
+    let _ = dotenv::from_path(std::env::current_dir()?.join(".env"));
     init_logger();
 
     let mut core = Core::new()?;
