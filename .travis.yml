@@ -5,17 +5,18 @@ rust:
 
 cache: cargo
 
+env:
+  # Disable rustc info cache because it causes .rustc_info.json to keep
+  # changing which destablize the cache.
+  - 'CARGO_CACHE_RUSTC_INFO=0'
+
 script:
   - cargo build --verbose
   - cargo test --verbose
   - cargo build --release --verbose
   - cargo test --release --verbose
   - cp target/release/telegram-rustevalbot /tmp/
-  - rm -rf target/{debug,release}/{,lib}telegram-rustevalbot*
-  - rm -rf target/{debug,release}/{build,.fingerprint}/telegram-rustevalbot-*
-  - rm -rf target/{debug,release}/deps/telegram_rustevalbot-*
-  - rm -rf target/*/{release,debug}/.fingerprint/telegram-rustevalbot-*
-  - rm -rf target/debug/incremental
+  - ci/cleanup-target.sh
 
 after_success:
   - cat ci/server_ssh_key >> $HOME/.ssh/known_hosts
