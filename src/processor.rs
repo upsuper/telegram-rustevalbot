@@ -1,20 +1,20 @@
 use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::rc::Rc;
 
 use futures::{Future, IntoFuture};
 use telegram_bot::{Api, CanSendMessage, DeleteMessage, EditMessageText};
-use telegram_bot::{Message, MessageChat, MessageId, MessageKind, ParseMode, Update, UpdateKind};
+use telegram_bot::{Message, MessageChat, MessageKind, ParseMode, Update, UpdateKind};
 
 use super::ADMIN_ID;
 use command::{Command, Executor};
+use record::RecordService;
 use utils;
 
 /// Processor for handling updates from Telegram.
 pub struct Processor<'a> {
     api: Api,
     executor: Executor<'a>,
-    records: Rc<RefCell<VecDeque<Record>>>,
+    records: Rc<RefCell<RecordService>>,
 }
 
 type BoxFuture = Box<dyn Future<Item = (), Error = ()>>;
@@ -25,7 +25,7 @@ impl<'a> Processor<'a> {
         Processor {
             api,
             executor,
-            records: Rc::new(RefCell::new(VecDeque::new())),
+            records: Rc::new(RefCell::new(RecordService::init())),
         }
     }
 
@@ -40,16 +40,13 @@ impl<'a> Processor<'a> {
     }
 
     fn handle_message(&self, id: i64, message: Message) -> BoxFuture {
-        self.clean_old_records(message.date);
+        self.records.borrow_mut().clear_old_records(message.date);
         let cmd = match Self::build_command(id, &message) {
             Ok(cmd) => cmd,
             Err(()) => return Box::new(Ok(()).into_future()),
         };
-        let mut record = Record {
-            msg: message.id,
-            reply: None,
-            date: message.date,
-        };
+        let msg_id = message.id;
+        self.records.borrow_mut().push_record(msg_id, message.date);
         let chat = message.chat.clone();
         let api = self.api.clone();
         let records = self.records.clone();
@@ -64,8 +61,7 @@ impl<'a> Processor<'a> {
                 api.send(msg)
                     .map(move |reply| {
                         info!("{}> sent as {}", id, reply.id);
-                        record.reply = Some(reply.id);
-                        records.borrow_mut().push_back(record);
+                        records.borrow_mut().set_reply(msg_id, reply.id);
                     })
                     .map_err(move |err| warn!("{}> error: {:?}", id, err))
             })),
@@ -80,19 +76,9 @@ impl<'a> Processor<'a> {
             Err(()) => return Box::new(Ok(()).into_future()),
         };
         let msg_id = message.id;
-        let reply_id = self
-            .records
-            .borrow()
-            .iter()
-            .rev()
-            .find(|r| r.msg == msg_id)
-            .and_then(|r| r.reply);
-        let reply_id = match reply_id {
+        let reply_id = match self.records.borrow().find_reply(msg_id) {
             Some(reply) => reply,
-            None => {
-                warn!("{}> reply not found", id);
-                return Box::new(Ok(()).into_future());
-            }
+            None => return Box::new(Ok(()).into_future()),
         };
 
         let chat = message.chat.clone();
@@ -113,12 +99,7 @@ impl<'a> Processor<'a> {
             None => {
                 let delete = DeleteMessage::new(chat, reply_id);
                 info!("{}> deleting", id);
-                records
-                    .borrow_mut()
-                    .iter_mut()
-                    .rev()
-                    .find(|r| r.msg == msg_id)
-                    .map(|r| r.reply = None);
+                records.borrow_mut().remove_reply(msg_id);
                 Box::new(
                     api.send(delete)
                         .map(move |_| info!("{}> deleted", id))
@@ -154,24 +135,4 @@ impl<'a> Processor<'a> {
             is_private,
         })
     }
-
-    fn clean_old_records(&self, current_date: i64) {
-        // We can clean up records up to 48hrs ago, because messages before that cannot be
-        // edited anymore.
-        let date_to_clean = current_date - 48 * 3600;
-        let mut records = self.records.borrow_mut();
-        while let Some(record) = records.pop_front() {
-            if record.date > date_to_clean {
-                records.push_front(record);
-                break;
-            }
-        }
-    }
-}
-
-struct Record {
-    msg: MessageId,
-    reply: Option<MessageId>,
-    /// Same as Message::date, a UNIX epoch in seconds.
-    date: i64,
 }

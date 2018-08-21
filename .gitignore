@@ -1,3 +1,4 @@
 .env
+record_list.json
 /target
 **/*.rs.bk

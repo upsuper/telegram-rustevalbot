@@ -15,12 +15,14 @@ extern crate reqwest;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate serde_json;
 extern crate telegram_bot;
 extern crate tokio_core;
 extern crate unicode_width;
 
 mod command;
 mod processor;
+mod record;
 mod shutdown;
 mod utils;
 
