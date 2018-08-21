@@ -16,7 +16,14 @@ script:
   - cargo build --release --verbose
   - cargo test --release --verbose
   - cp target/release/telegram-rustevalbot /tmp/
-  - ci/cleanup-target.sh
+
+before_cache:
+  - rm -rf target/{debug,release}/{,lib}telegram-rustevalbot*
+  - rm -rf target/{debug,release}/telegram_rustevalbot-*
+  - rm -rf target/{debug,release}/{build,.fingerprint}/telegram-rustevalbot-*
+  - rm -rf target/{debug,release}/deps/telegram_rustevalbot-*
+  - rm -rf target/*/{debug,release}/.fingerprint/telegram-rustevalbot-*
+  - rm -rf target/debug/incremental
 
 after_success:
   - cat ci/server_ssh_key >> $HOME/.ssh/known_hosts
