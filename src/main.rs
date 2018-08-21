@@ -28,8 +28,10 @@ use futures::future::Either;
 use futures::{Future, Stream};
 use std::cell::RefCell;
 use std::env;
-use std::io::{Error as IOError, ErrorKind as IOErrorKind, Write};
+use std::io::Write;
 use std::rc::Rc;
+use std::time::Duration;
+use std::thread;
 use telegram_bot::{Api, CanSendMessage, Error, GetMe, GetUpdates, UserId};
 use tokio_core::reactor::Core;
 
@@ -101,30 +103,46 @@ fn main() -> Result<(), Error> {
         api.spawn(id.text(format!("Start version: {} @{}", VERSION, self_username)));
     }
     let counter = Rc::new(RefCell::new(0));
-    let counter_to_move = counter.clone();
-    let stream = api.stream().for_each(move |update| {
+    let retried = RefCell::new(0);
+    let mut handle_update = |update| {
         debug!("{:?}", update);
         let future = processor.handle_update(update);
-        let counter = &counter_to_move;
         let counter_clone = counter.clone();
         *counter.borrow_mut() += 1;
         handle.spawn(future.then(move |result| {
             *counter_clone.borrow_mut() -= 1;
             result
         }));
+        // Reset retried counter
+        *retried.borrow_mut() = 0;
         Ok(())
-    });
-    let shutdown_id = core.run(
-        stream
+    };
+    let shutdown_id = loop {
+        let future = api
+            .stream()
+            .for_each(&mut handle_update)
             .select2(SHUTDOWN.renew())
             .then(|result| match result {
                 Ok(Either::A(((), _))) => Ok(None),
                 Ok(Either::B((id, _))) => Ok(Some(id)),
                 Err(Either::A((e, _))) => Err(e),
-                Err(Either::B((e, _))) => Err(IOError::new(IOErrorKind::Other, e).into()),
-            }),
-    )?;
-    let shutdown_id = shutdown_id.expect("Unexpected stop");
+                Err(Either::B((e, _))) => panic!("shutdown canceled? {}", e),
+            });
+        match core.run(future) {
+            Ok(Some(id)) => break id,
+            Ok(None) => panic!("unexpected stop"),
+            Err(e) => {
+                warn!("telegram error: {}", e);
+                let mut retried = retried.borrow_mut();
+                if *retried >= 5 {
+                    error!("retried too many times!");
+                    panic!();
+                }
+                *retried += 1;
+                thread::sleep(Duration::new(1 << *retried, 0));
+            }
+        }
+    };
     // Waiting for any on-going futures.
     while *counter.borrow() > 0 {
         core.turn(None);
