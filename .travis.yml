@@ -18,11 +18,10 @@ script:
   - cp target/release/telegram-rustevalbot /tmp/
 
 before_cache:
-  - rm -rf target/{debug,release}/{,lib}telegram-rustevalbot*
+  - rm -rf target/{debug,release}/telegram-rustevalbot*
   - rm -rf target/{debug,release}/telegram_rustevalbot-*
   - rm -rf target/{debug,release}/{build,.fingerprint}/telegram-rustevalbot-*
   - rm -rf target/{debug,release}/deps/telegram_rustevalbot-*
-  - rm -rf target/*/{debug,release}/.fingerprint/telegram-rustevalbot-*
   - rm -rf target/debug/incremental
 
 after_success:
