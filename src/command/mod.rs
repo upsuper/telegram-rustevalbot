@@ -3,12 +3,10 @@ mod crate_;
 mod eval;
 mod version;
 
-use futures::unsync::oneshot;
 use futures::{Future, IntoFuture};
 use reqwest::header::{Headers, UserAgent};
 use reqwest::unstable::async::Client;
 use std::borrow::Cow;
-use std::cell::Cell;
 use tokio_core::reactor::Handle;
 use utils::{is_separator, Void};
 
@@ -18,8 +16,6 @@ pub struct Executor<'a> {
     client: Client,
     /// Telegram username of the bot
     username: &'a str,
-    /// A field to indicate that shutdown.
-    shutdown: Cell<Option<oneshot::Sender<i64>>>,
 }
 
 pub struct Command<'a> {
@@ -50,19 +46,14 @@ type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void>>;
 
 impl<'a> Executor<'a> {
     /// Create new command executor.
-    pub fn new(handle: &Handle, username: &'a str, shutdown: oneshot::Sender<i64>) -> Self {
+    pub fn new(handle: &Handle, username: &'a str) -> Self {
         let mut headers = Headers::new();
         headers.set(UserAgent::new(super::USER_AGENT));
         let client = Client::builder()
             .default_headers(headers)
             .build(handle)
             .unwrap();
-        let shutdown = Cell::new(Some(shutdown));
-        Executor {
-            client,
-            username,
-            shutdown,
-        }
+        Executor { client, username }
     }
 
     /// Execute a command.
@@ -84,7 +75,7 @@ impl<'a> Executor<'a> {
             if cmd.is_private && cmd.is_admin {
                 match info.name {
                     "/shutdown" => {
-                        self.shutdown.replace(None).unwrap().send(cmd.id).unwrap();
+                        super::SHUTDOWN.shutdown(cmd.id);
                         return Some(str_to_box_future("start shutting down..."));
                     }
                     _ => {}

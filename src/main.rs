@@ -21,10 +21,10 @@ extern crate unicode_width;
 
 mod command;
 mod processor;
+mod shutdown;
 mod utils;
 
 use futures::future::Either;
-use futures::unsync::oneshot;
 use futures::{Future, Stream};
 use std::cell::RefCell;
 use std::env;
@@ -47,6 +47,7 @@ lazy_static! {
         env::var("BOT_ADMIN_ID")
             .ok()
             .and_then(|s| str::parse(&s).map(UserId::new).ok());
+    static ref SHUTDOWN: shutdown::Shutdown = Default::default();
 }
 
 fn init_logger() {
@@ -94,8 +95,7 @@ fn main() -> Result<(), Error> {
     let self_username = self_user.username.expect("No username?");
     info!("Authorized as @{}", self_username);
     // Build the command executor
-    let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-    let executor = command::Executor::new(&handle, &self_username, shutdown_sender);
+    let executor = command::Executor::new(&handle, &self_username);
     let processor = processor::Processor::new(api.clone(), executor);
     if let Some(id) = &*ADMIN_ID {
         api.spawn(id.text(format!("Start version: {} @{}", VERSION, self_username)));
@@ -116,7 +116,7 @@ fn main() -> Result<(), Error> {
     });
     let shutdown_id = core.run(
         stream
-            .select2(shutdown_receiver)
+            .select2(SHUTDOWN.renew())
             .then(|result| match result {
                 Ok(Either::A(((), _))) => Ok(None),
                 Ok(Either::B((id, _))) => Ok(Some(id)),
