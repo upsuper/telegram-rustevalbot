@@ -65,6 +65,9 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
                     true => output.into(),
                     false => truncate_output(output),
                 };
+                if output.is_empty() {
+                    return "(no output)".to_string();
+                }
                 return format!("<pre>{}</pre>", encode_minimal(&output));
             }
             for line in resp.stderr.split('\n') {
