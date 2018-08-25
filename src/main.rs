@@ -34,8 +34,8 @@ use std::cell::RefCell;
 use std::env;
 use std::io::Write;
 use std::rc::Rc;
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
 use telegram_bot::{Api, CanSendMessage, Error, GetMe, GetUpdates, UserId};
 use tokio_core::reactor::Core;
 

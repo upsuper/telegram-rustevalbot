@@ -12,12 +12,10 @@ impl RecordService {
     /// Create record list, restore from record list file if possible.
     pub fn init() -> Self {
         match File::open(RECORD_LIST_FILE) {
-            Ok(file) => {
-                match serde_json::from_reader(file) {
-                    Ok(list) => return RecordService(list),
-                    Err(e) => error!("failed to parse record list: {:?}", e),
-                }
-            }
+            Ok(file) => match serde_json::from_reader(file) {
+                Ok(list) => return RecordService(list),
+                Err(e) => error!("failed to parse record list: {:?}", e),
+            },
             Err(e) => {
                 // It's fine that the file doesn't exist.
                 if e.kind() != io::ErrorKind::NotFound {
@@ -74,12 +72,10 @@ impl RecordService {
 impl Drop for RecordService {
     fn drop(&mut self) {
         match File::create(RECORD_LIST_FILE) {
-            Ok(file) => {
-                match serde_json::to_writer(file, &self.0) {
-                    Ok(()) => {}
-                    Err(e) => error!("failed to serialize record list: {:?}", e),
-                }
-            }
+            Ok(file) => match serde_json::to_writer(file, &self.0) {
+                Ok(()) => {}
+                Err(e) => error!("failed to serialize record list: {:?}", e),
+            },
             Err(e) => error!("failed to create record list: {:?}", e),
         }
     }
