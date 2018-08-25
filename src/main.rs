@@ -125,14 +125,13 @@ fn main() -> Result<(), Error> {
             .for_each(&mut handle_update)
             .select2(SHUTDOWN.renew())
             .then(|result| match result {
-                Ok(Either::A(((), _))) => Ok(None),
-                Ok(Either::B((id, _))) => Ok(Some(id)),
+                Ok(Either::A(((), _))) => panic!("unexpected stop"),
+                Ok(Either::B((id, _))) => Ok(id),
                 Err(Either::A((e, _))) => Err(e),
                 Err(Either::B((e, _))) => panic!("shutdown canceled? {}", e),
             });
         match core.run(future) {
-            Ok(Some(id)) => break id,
-            Ok(None) => panic!("unexpected stop"),
+            Ok(id) => break id,
             Err(e) => {
                 warn!("telegram error: {}", e);
                 let mut retried = retried.borrow_mut();
