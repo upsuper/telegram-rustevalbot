@@ -1,4 +1,5 @@
-.env
-record_list.json
+/.env
+/record_list.json
 /target
+/upgrade
 **/*.rs.bk

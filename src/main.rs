@@ -9,6 +9,7 @@ extern crate lazy_static;
 extern crate log;
 #[macro_use]
 extern crate matches;
+extern crate notify;
 extern crate percent_encoding;
 extern crate regex;
 extern crate reqwest;
@@ -24,6 +25,7 @@ mod command;
 mod processor;
 mod record;
 mod shutdown;
+mod upgrade;
 mod utils;
 
 use futures::future::Either;
@@ -87,6 +89,7 @@ fn main() -> Result<(), Error> {
     // We don't care if we fail to load .env file.
     let _ = dotenv::from_path(std::env::current_dir()?.join(".env"));
     init_logger();
+    upgrade::init();
 
     let mut core = Core::new()?;
     let token = env::var("TELEGRAM_TOKEN").expect("TELEGRAM_TOKEN must be set!");
@@ -149,11 +152,14 @@ fn main() -> Result<(), Error> {
         core.turn(None);
     }
     // Start exiting
-    let mut get_updates = GetUpdates::new();
-    get_updates.offset(shutdown_id + 1);
-    info!("{}> confirming", shutdown_id);
-    core.run(api.send(get_updates).and_then(move |_| {
-        info!("{}> confirmed", shutdown_id);
-        api.send(ADMIN_ID.unwrap().text("bye"))
-    })).map(|_| ())
+    if let Some(shutdown_id) = shutdown_id {
+        let mut get_updates = GetUpdates::new();
+        get_updates.offset(shutdown_id + 1);
+        info!("{}> confirming", shutdown_id);
+        core.run(api.send(get_updates).map(move |_| {
+            info!("{}> confirmed", shutdown_id);
+        }))?;
+    }
+    core.run(api.send(ADMIN_ID.unwrap().text("bye")))?;
+    Ok(())
 }

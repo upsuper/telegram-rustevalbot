@@ -75,7 +75,7 @@ impl<'a> Executor<'a> {
             if cmd.is_private && cmd.is_admin {
                 match info.name {
                     "/shutdown" => {
-                        super::SHUTDOWN.shutdown(cmd.id);
+                        super::SHUTDOWN.shutdown(Some(cmd.id));
                         return Some(str_to_box_future("start shutting down..."));
                     }
                     _ => {}

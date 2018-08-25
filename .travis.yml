@@ -25,6 +25,7 @@ before_cache:
   - rm -rf target/debug/incremental
 
 after_success:
+  - git rev-parse HEAD > upgrade
   - cat ci/server_ssh_key >> $HOME/.ssh/known_hosts
   - openssl aes-256-cbc
     -K $encrypted_782b57b1cc27_key

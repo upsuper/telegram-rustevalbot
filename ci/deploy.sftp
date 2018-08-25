@@ -1,2 +1,3 @@
 -rm telegram-rustevalbot
 put /tmp/telegram-rustevalbot
+put upgrade
