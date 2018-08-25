@@ -155,9 +155,9 @@ fn main() -> Result<(), Error> {
     if let Some(shutdown_id) = shutdown_id {
         let mut get_updates = GetUpdates::new();
         get_updates.offset(shutdown_id + 1);
-        info!("{}> confirming", shutdown_id);
+        debug!("{}> confirming", shutdown_id);
         core.run(api.send(get_updates).map(move |_| {
-            info!("{}> confirmed", shutdown_id);
+            debug!("{}> confirmed", shutdown_id);
         }))?;
     }
     core.run(api.send(ADMIN_ID.unwrap().text("bye")))?;

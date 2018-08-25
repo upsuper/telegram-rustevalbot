@@ -54,13 +54,13 @@ impl<'a> Processor<'a> {
             Some(future) => Box::new(future.then(move |reply| {
                 let reply = reply.unwrap();
                 let reply = reply.trim_matches(utils::is_separator);
-                info!("{}> sending: {:?}", id, reply);
+                debug!("{}> sending: {:?}", id, reply);
                 let mut msg = chat.text(reply);
                 msg.parse_mode(ParseMode::Html);
                 msg.disable_preview();
                 api.send(msg)
                     .map(move |reply| {
-                        info!("{}> sent as {}", id, reply.id);
+                        debug!("{}> sent as {}", id, reply.id);
                         records.borrow_mut().set_reply(msg_id, reply.id);
                     })
                     .map_err(move |err| warn!("{}> error: {:?}", id, err))
@@ -88,21 +88,21 @@ impl<'a> Processor<'a> {
             Some(future) => Box::new(future.then(move |reply| {
                 let reply = reply.unwrap();
                 let reply = reply.trim_matches(utils::is_separator);
-                info!("{}> updating: {:?}", id, reply);
+                debug!("{}> updating: {:?}", id, reply);
                 let mut msg = EditMessageText::new(chat, reply_id, reply);
                 msg.parse_mode(ParseMode::Html);
                 msg.disable_preview();
                 api.send(msg)
-                    .map(move |_| info!("{}> updated", id))
+                    .map(move |_| debug!("{}> updated", id))
                     .map_err(move |err| warn!("{}> error: {:?}", id, err))
             })),
             None => {
                 let delete = DeleteMessage::new(chat, reply_id);
-                info!("{}> deleting", id);
+                debug!("{}> deleting", id);
                 records.borrow_mut().remove_reply(msg_id);
                 Box::new(
                     api.send(delete)
-                        .map(move |_| info!("{}> deleted", id))
+                        .map(move |_| debug!("{}> deleted", id))
                         .map_err(move |err| warn!("{}> error: {:?}", id, err)),
                 )
             }
@@ -122,7 +122,7 @@ impl<'a> Processor<'a> {
             .map(|s| s.as_str())
             .unwrap_or("");
         let user_id = message.from.id;
-        info!(
+        debug!(
             "{}> received from {}({}): [{}] {:?}",
             id, username, user_id, message.id, command
         );
