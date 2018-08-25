@@ -39,9 +39,3 @@ after_success:
          -P 2222
          rustevalbot@vps9.upsuper.org
   - rm /tmp/deploy_rsa
-
-notifications:
-  email:
-    recipients:
-      - travis-ci@upsuper.org
-    on_success: always
