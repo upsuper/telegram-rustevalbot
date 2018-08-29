@@ -70,6 +70,7 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
                 }
                 return format!("<pre>{}</pre>", encode_minimal(&output));
             }
+            let mut return_line: Option<&str> = None;
             for line in resp.stderr.split('\n') {
                 let line = line.trim();
                 if line.starts_with("Compiling")
@@ -78,6 +79,17 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
                 {
                     continue;
                 }
+                if return_line.is_none() {
+                    return_line = Some(line);
+                } else {
+                    let return_line = return_line.as_mut().unwrap();
+                    const ERROR_LINE: &str = "error";
+                    if line.starts_with(ERROR_LINE) && !return_line.starts_with(ERROR_LINE) {
+                        *return_line = line;
+                    }
+                }
+            }
+            if let Some(line) = return_line {
                 let line = encode_minimal(line);
                 let line = RE_ERROR.replacen(&line, 1, |captures: &Captures| {
                     let err_num = captures.get(1).unwrap().as_str();
@@ -100,9 +112,10 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
                     let url = format!("https://github.com/rust-lang/rust/issues/{}", issue_num);
                     format!(r#"(see issue <a href="{}">#{}</a>)"#, url, issue_num)
                 });
-                return format!("{}", line);
+                format!("{}", line)
+            } else {
+                "(nothing??)".to_string()
             }
-            "(nothing??)".to_string()
         })
         .map_err(utils::map_reqwest_error)
 }
