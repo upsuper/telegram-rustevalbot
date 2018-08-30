@@ -79,14 +79,12 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
                 {
                     continue;
                 }
+                if line.starts_with("error") {
+                    return_line = Some(line);
+                    break;
+                }
                 if return_line.is_none() {
                     return_line = Some(line);
-                } else {
-                    let return_line = return_line.as_mut().unwrap();
-                    const ERROR_LINE: &str = "error";
-                    if line.starts_with(ERROR_LINE) && !return_line.starts_with(ERROR_LINE) {
-                        *return_line = line;
-                    }
                 }
             }
             if let Some(line) = return_line {
