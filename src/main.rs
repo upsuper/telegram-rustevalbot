@@ -136,14 +136,14 @@ fn main() -> Result<(), Error> {
         match core.run(future) {
             Ok(id) => break id,
             Err(e) => {
-                warn!("telegram error: {}", e);
                 let mut retried = retried.borrow_mut();
-                if *retried >= 5 {
+                warn!("({}) telegram error: {:?}", retried, e);
+                if *retried >= 13 {
                     error!("retried too many times!");
                     panic!();
                 }
-                *retried += 1;
                 thread::sleep(Duration::new(1 << *retried, 0));
+                *retried += 1;
             }
         }
     };
