@@ -1,5 +1,6 @@
 /.env
 /record_list.json
+/search-index.js
 /target
 /upgrade
 **/*.rs.bk

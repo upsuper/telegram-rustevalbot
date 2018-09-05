@@ -1,5 +1,6 @@
 mod about;
 mod crate_;
+mod doc;
 mod eval;
 mod version;
 
@@ -9,6 +10,10 @@ use reqwest::unstable::async::Client;
 use std::borrow::Cow;
 use tokio_core::reactor::Handle;
 use utils::{is_separator, Void};
+
+pub(super) fn init() {
+    doc::init();
+}
 
 /// Command executor.
 pub struct Executor<'a> {
@@ -160,6 +165,7 @@ macro_rules! commands {
 commands! {
     general: [
         "/crate" => crate_ / "query crate information",
+        "/doc" => doc / "query document of Rust's standard library",
         "/eval" => eval / "evaluate a piece of Rust code",
         "/rustc_version" => version / "display rustc version being used",
     ];

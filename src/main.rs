@@ -1,5 +1,6 @@
 extern crate dotenv;
 extern crate env_logger;
+extern crate fst;
 extern crate futures;
 extern crate htmlescape;
 extern crate itertools;
@@ -13,6 +14,7 @@ extern crate notify;
 extern crate percent_encoding;
 extern crate regex;
 extern crate reqwest;
+extern crate rustdoc_seeker;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -90,6 +92,7 @@ fn main() -> Result<(), Error> {
     let _ = dotenv::from_path(std::env::current_dir()?.join(".env"));
     init_logger();
     upgrade::init();
+    command::init();
 
     let mut core = Core::new()?;
     let token = env::var("TELEGRAM_TOKEN").expect("TELEGRAM_TOKEN must be set!");
