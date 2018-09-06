@@ -24,19 +24,19 @@ pub(super) fn init() {
 }
 
 pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
-    let mut path = ctx
+    let path = ctx
         .args
         .split("::")
         .map(|s| s.trim_matches(utils::is_separator))
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>();
-    let name = match path.pop() {
-        Some(name) => name,
+    let QueryPath { root, path, name } = match split_path(&path) {
+        Some(query) => query,
         None => return Ok("(empty query)".to_string()).into_future(),
     };
     let mut matched_items = SEEKER
         .search(&Subsequence::new(name))
-        .filter(|item| item.matches_path(&path))
+        .filter(|item| item.matches_path(root, path))
         .collect::<Vec<_>>();
     if matched_items.is_empty() {
         return Ok("(empty result)".to_string()).into_future();
@@ -61,17 +61,73 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
     return Ok(result).into_future();
 }
 
+struct QueryPath<'a> {
+    root: RootLevel,
+    path: &'a [&'a str],
+    name: &'a str,
+}
+
+fn split_path<'a>(path: &'a [&'a str]) -> Option<QueryPath<'a>> {
+    let (root, path) = match path.split_first()? {
+        (root, p) => match RootLevel::from_str(root) {
+            Some(r) => (r, p),
+            None => (RootLevel::Std, path),
+        },
+    };
+    let (name, path) = path.split_last()?;
+    Some(QueryPath { root, path, name })
+}
+
+macro_rules! define_enum {
+    (
+        enum $name:ident {
+            $($variant:ident => $str:expr,)+
+        }
+    ) => {
+        #[derive(Clone, Copy)]
+        enum $name {
+            $($variant,)+
+        }
+
+        impl $name {
+            fn from_str(s: &str) -> Option<Self> {
+                Some(match s {
+                    $($str => $name::$variant,)+
+                    _ => return None,
+                })
+            }
+
+            fn as_str(&self) -> &'static str {
+                match self {
+                    $($name::$variant => $str,)+
+                }
+            }
+        }
+    }
+}
+
+define_enum! {
+    enum RootLevel {
+        Alloc => "alloc",
+        Core => "core",
+        Std => "std",
+    }
+}
+
 trait DocItemExt {
-    fn matches_path(&self, path: &[&str]) -> bool;
+    fn matches_path(&self, root: RootLevel, path: &[&str]) -> bool;
     fn write_item(&self, output: &mut impl fmt::Write) -> fmt::Result;
 }
 
 impl DocItemExt for DocItem {
-    fn matches_path(&self, path: &[&str]) -> bool {
+    fn matches_path(&self, root: RootLevel, path: &[&str]) -> bool {
         let mut item_path = self
             .path
             .split("::")
             .chain(self.parent.iter().map(|p| p.as_ref().deref()));
+        if item_path.next().unwrap() != root.as_str() {
+            return false;
+        }
         for level in path.iter() {
             loop {
                 match item_path.next() {
