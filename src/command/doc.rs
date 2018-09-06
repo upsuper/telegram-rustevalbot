@@ -44,6 +44,7 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
     matched_items.sort_by_key(|item| {
         (
             item.name.as_ref().len(),
+            !is_primitive(&item.name),
             &item.path,
             item.parent.as_ref().map(|p| p.as_ref()),
         )
@@ -114,6 +115,10 @@ define_enum! {
     }
 }
 
+fn is_primitive(ti: &TypeItem) -> bool {
+    matches!(ti, TypeItem::Primitive(_))
+}
+
 trait DocItemExt {
     fn matches_path(&self, root: RootLevel, path: &[&str]) -> bool;
     fn write_item(&self, output: &mut impl fmt::Write) -> fmt::Result;
@@ -149,7 +154,10 @@ impl DocItemExt for DocItem {
         write!(output, "{}", self)?;
         output.write_str(r#"">"#)?;
         // Write full path.
-        write!(output, "{}::", self.path)?;
+        if !is_primitive(&self.name)
+            && !self.parent.as_ref().map_or(false, is_primitive) {
+            write!(output, "{}::", self.path)?;
+        }
         if let Some(parent) = &self.parent {
             write!(output, "{}::", parent.as_ref())?;
         }
@@ -158,6 +166,9 @@ impl DocItemExt for DocItem {
             output.write_char('!')?;
         }
         output.write_str("</a>")?;
+        if is_primitive(&self.name) {
+            output.write_str(" (primitive type)")?;
+        }
         // Write description.
         if !self.desc.is_empty() {
             output.write_str(" - ")?;
