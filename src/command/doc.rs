@@ -42,9 +42,9 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
     }
     matched_items.sort_by_key(|item| {
         (
-            item.name.plain().len(),
+            item.name.as_ref().len(),
             &item.path,
-            item.parent.as_ref().map(|p| p.plain()),
+            item.parent.as_ref().map(|p| p.as_ref()),
         )
     });
     // Return only limited number of results.
@@ -54,7 +54,7 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
     // Generate result.
     let mut result = String::new();
     for item in matched_items.iter() {
-        item.write_link(&mut result).unwrap();
+        item.write_item(&mut result).unwrap();
         result.push('\n');
     }
     return Ok(result).into_future();
@@ -62,8 +62,7 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
 
 trait DocItemExt {
     fn matches_path(&self, path: &[&str]) -> bool;
-    fn write_path(&self, output: &mut impl fmt::Write) -> fmt::Result;
-    fn write_link(&self, output: &mut impl fmt::Write) -> fmt::Result;
+    fn write_item(&self, output: &mut impl fmt::Write) -> fmt::Result;
 }
 
 impl DocItemExt for DocItem {
@@ -71,7 +70,7 @@ impl DocItemExt for DocItem {
         let mut item_path = self
             .path
             .split("::")
-            .chain(self.parent.iter().map(|p| p.plain().deref()));
+            .chain(self.parent.iter().map(|p| p.as_ref().deref()));
         for level in path.iter() {
             loop {
                 match item_path.next() {
@@ -87,22 +86,34 @@ impl DocItemExt for DocItem {
         true
     }
 
-    fn write_path(&self, output: &mut impl fmt::Write) -> fmt::Result {
-        write!(output, "{}::", self.path)?;
-        if let Some(parent) = &self.parent {
-            write!(output, "{}::", parent.plain())?;
-        }
-        output.write_str(self.name.plain())
-    }
-
-    fn write_link(&self, output: &mut impl fmt::Write) -> fmt::Result {
+    fn write_item(&self, output: &mut impl fmt::Write) -> fmt::Result {
+        // Write link tag.
         output.write_str(r#"<a href="https://doc.rust-lang.org/"#)?;
         write!(output, "{}", self)?;
         output.write_str(r#"">"#)?;
-        self.write_path(output)?;
+        // Write full path.
+        write!(output, "{}::", self.path)?;
+        if let Some(parent) = &self.parent {
+            write!(output, "{}::", parent.as_ref())?;
+        }
+        output.write_str(self.name.as_ref())?;
         if matches!(self.name, TypeItem::Macro(_)) {
             output.write_char('!')?;
         }
-        output.write_str("</a>")
+        output.write_str("</a>")?;
+        // Write description.
+        if !self.desc.is_empty() {
+            output.write_str(" - ")?;
+            const MAX_LEN: usize = 50;
+            if self.desc.len() > MAX_LEN {
+                // This assumes that we don't have non-ASCII character
+                // in descriptions.
+                output.write_str(&self.desc[..MAX_LEN - 3])?;
+                output.write_str("...")?;
+            } else {
+                output.write_str(&self.desc)?;
+            }
+        }
+        Ok(())
     }
 }
