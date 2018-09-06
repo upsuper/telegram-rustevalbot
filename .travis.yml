@@ -15,6 +15,7 @@ script:
   - cargo test --verbose
   - cargo build --release --verbose
   - cargo test --release --verbose
+  - strip target/release/telegram-rustevalbot
   - cp target/release/telegram-rustevalbot /tmp/
 
 before_cache:
