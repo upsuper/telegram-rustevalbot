@@ -1,5 +1,6 @@
 use fst::automaton::Subsequence;
 use futures::{Future, IntoFuture};
+use htmlescape::encode_minimal;
 use lazy_static;
 use rustdoc_seeker::{DocItem, RustDoc, RustDocSeeker, TypeItem};
 use std::cmp;
@@ -108,10 +109,10 @@ impl DocItemExt for DocItem {
             if self.desc.len() > MAX_LEN {
                 // This assumes that we don't have non-ASCII character
                 // in descriptions.
-                output.write_str(&self.desc[..MAX_LEN - 3])?;
+                output.write_str(&encode_minimal(&self.desc[..MAX_LEN - 3]))?;
                 output.write_str("...")?;
             } else {
-                output.write_str(&self.desc)?;
+                output.write_str(&encode_minimal(&self.desc))?;
             }
         }
         Ok(())
