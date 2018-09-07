@@ -41,10 +41,11 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
     if matched_items.is_empty() {
         return Ok("(empty result)".to_string()).into_future();
     }
+    // Sort items.
     matched_items.sort_by_key(|item| {
         (
             item.name.as_ref().len(),
-            !is_primitive(&item.name),
+            ItemType::from(&item.name),
             &item.path,
             item.parent.as_ref().map(|p| p.as_ref()),
         )
@@ -115,8 +116,28 @@ define_enum! {
     }
 }
 
-fn is_primitive(ti: &TypeItem) -> bool {
-    matches!(ti, TypeItem::Primitive(_))
+
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
+enum ItemType {
+    Keyword,
+    Primitive,
+    Other,
+}
+
+impl<'a> From<&'a TypeItem> for ItemType {
+    fn from(item: &TypeItem) -> Self {
+        match item {
+            TypeItem::Keyword(_) => ItemType::Keyword,
+            TypeItem::Primitive(_) => ItemType::Primitive,
+            _ => ItemType::Other,
+        }
+    }
+}
+
+impl ItemType {
+    fn is_keyword_or_primitive(&self) -> bool {
+        matches!(self, ItemType::Keyword | ItemType::Primitive)
+    }
 }
 
 trait DocItemExt {
@@ -154,9 +175,15 @@ impl DocItemExt for DocItem {
         write!(output, "{}", self)?;
         output.write_str(r#"">"#)?;
         // Write full path.
-        if !is_primitive(&self.name)
-            && !self.parent.as_ref().map_or(false, is_primitive) {
-            write!(output, "{}::", self.path)?;
+        let ty = ItemType::from(&self.name);
+        if !ty.is_keyword_or_primitive() {
+            let is_parent_keyword_or_primitive = self
+                .parent
+                .as_ref()
+                .map_or(false, |p| ItemType::from(p).is_keyword_or_primitive());
+            if !is_parent_keyword_or_primitive {
+                write!(output, "{}::", self.path)?;
+            }
         }
         if let Some(parent) = &self.parent {
             write!(output, "{}::", parent.as_ref())?;
@@ -166,8 +193,10 @@ impl DocItemExt for DocItem {
             output.write_char('!')?;
         }
         output.write_str("</a>")?;
-        if is_primitive(&self.name) {
-            output.write_str(" (primitive type)")?;
+        match ty {
+            ItemType::Keyword => output.write_str(" (keyword)")?,
+            ItemType::Primitive => output.write_str(" (primitive type)")?,
+            _ => {}
         }
         // Write description.
         if !self.desc.is_empty() {
