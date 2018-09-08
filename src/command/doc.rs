@@ -149,22 +149,12 @@ impl DocItemExt for DocItem {
             .path
             .split("::")
             .chain(self.parent.iter().map(|p| p.as_ref().deref()));
-        if item_path.next().unwrap() != root.as_str() {
-            return false;
-        }
-        for level in path.iter() {
-            loop {
-                match item_path.next() {
-                    Some(l) => {
-                        if l.contains(level) {
-                            break;
-                        }
-                    }
-                    None => return false,
-                }
-            }
-        }
-        true
+        // Each level in the query path should be found in the item path
+        // with the same order.
+        item_path.next().unwrap() == root.as_str() &&
+            path.iter().all(|level| {
+                item_path.any(|l| l.contains(level))
+            })
     }
 
     fn write_item(&self, output: &mut impl fmt::Write) -> fmt::Result {
