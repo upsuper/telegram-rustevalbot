@@ -212,3 +212,30 @@ impl DocItemExt for DocItem {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rustdoc_seeker::DocItem;
+    use string_cache::DefaultAtom as Atom;
+
+    #[test]
+    fn test_matches_path() {
+        let item = DocItem::new(
+            TypeItem::Method(Atom::from("eq")),
+            Some(TypeItem::Struct(Atom::from("BTreeMap"))),
+            Atom::from("std::collections"),
+            Atom::from(""),
+        );
+        assert!(item.matches_path(RootLevel::Std, &["BTreeMap"]));
+        assert!(item.matches_path(RootLevel::Std, &["col"]));
+        assert!(item.matches_path(RootLevel::Std, &["Map"]));
+        assert!(item.matches_path(RootLevel::Std, &["col", "Map"]));
+        // XXX We may want to support case-insensitive matching
+        assert!(!item.matches_path(RootLevel::Std, &["map"]));
+        // XXX We may want to support fuzzy matching
+        assert!(!item.matches_path(RootLevel::Std, &["BMap"]));
+        assert!(!item.matches_path(RootLevel::Std, &["x"]));
+        assert!(!item.matches_path(RootLevel::Alloc, &["BTreeMap"]));
+    }
+}
