@@ -3,7 +3,6 @@ use futures::{Future, IntoFuture};
 use htmlescape::encode_minimal;
 use lazy_static;
 use rustdoc_seeker::{DocItem, RustDoc, RustDocSeeker, TypeItem};
-use std::cmp;
 use std::fmt;
 use std::fs;
 use std::ops::Deref;
@@ -52,8 +51,7 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
     });
     // Return only limited number of results.
     let max_count = if ctx.is_private { 10 } else { 3 };
-    let count = cmp::min(matched_items.len(), max_count);
-    let matched_items = &matched_items[..count];
+    matched_items.truncate(max_count);
     // Generate result.
     let mut result = String::new();
     for item in matched_items.iter() {
