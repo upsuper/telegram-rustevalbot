@@ -114,7 +114,6 @@ define_enum! {
     }
 }
 
-
 #[derive(Eq, Ord, PartialEq, PartialOrd)]
 enum ItemType {
     Keyword,
@@ -151,10 +150,10 @@ impl DocItemExt for DocItem {
             .chain(self.parent.iter().map(|p| p.as_ref().deref()));
         // Each level in the query path should be found in the item path
         // with the same order.
-        item_path.next().unwrap() == root.as_str() &&
-            path.iter().all(|level| {
-                item_path.any(|l| l.contains(level))
-            })
+        item_path.next().unwrap() == root.as_str()
+            && path
+                .iter()
+                .all(|level| item_path.any(|l| l.contains(level)))
     }
 
     fn write_item(&self, output: &mut impl fmt::Write) -> fmt::Result {
