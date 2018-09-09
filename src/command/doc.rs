@@ -45,6 +45,8 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
     matched_items.sort_by_key(|item| {
         (
             item.name.as_ref().len(),
+            // Prefer items with description.
+            item.desc.is_empty(),
             ItemType::from(&item.name),
             &item.path,
             item.parent.as_ref().map(|p| p.as_ref()),
