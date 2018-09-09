@@ -1,6 +1,7 @@
 extern crate dotenv;
 extern crate env_logger;
 extern crate fst;
+extern crate fst_subseq_ascii_caseless;
 extern crate futures;
 extern crate htmlescape;
 extern crate itertools;

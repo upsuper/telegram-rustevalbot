@@ -1,4 +1,4 @@
-use fst::automaton::Subsequence;
+use fst_subseq_ascii_caseless::SubseqAsciiCaseless;
 use futures::{Future, IntoFuture};
 use htmlescape::encode_minimal;
 use lazy_static;
@@ -33,8 +33,9 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
         Some(query) => query,
         None => return Ok("(empty query)".to_string()).into_future(),
     };
+    let lowercase_name = name.to_ascii_lowercase();
     let mut matched_items = SEEKER
-        .search(&Subsequence::new(name))
+        .search(&SubseqAsciiCaseless::new(&lowercase_name))
         .filter(|item| item.matches_path(root, path))
         .collect::<Vec<_>>();
     if matched_items.is_empty() {
