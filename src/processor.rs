@@ -33,15 +33,15 @@ impl<'a> Processor<'a> {
     pub fn handle_update(&self, update: Update) -> BoxFuture {
         let id = update.id;
         match update.kind {
-            UpdateKind::Message(message) => self.handle_message(id, message),
-            UpdateKind::EditedMessage(message) => self.handle_edit_message(id, message),
+            UpdateKind::Message(message) => self.handle_message(id, &message),
+            UpdateKind::EditedMessage(message) => self.handle_edit_message(id, &message),
             _ => Box::new(Ok(()).into_future()),
         }
     }
 
-    fn handle_message(&self, id: i64, message: Message) -> BoxFuture {
+    fn handle_message(&self, id: i64, message: &Message) -> BoxFuture {
         self.records.borrow_mut().clear_old_records(message.date);
-        let cmd = match Self::build_command(id, &message) {
+        let cmd = match Self::build_command(id, message) {
             Ok(cmd) => cmd,
             Err(()) => return Box::new(Ok(()).into_future()),
         };
@@ -50,7 +50,7 @@ impl<'a> Processor<'a> {
         let chat = message.chat.clone();
         let api = self.api.clone();
         let records = self.records.clone();
-        match self.executor.execute(cmd) {
+        match self.executor.execute(&cmd) {
             Some(future) => Box::new(future.then(move |reply| {
                 let reply = reply.unwrap();
                 let reply = reply.trim_matches(utils::is_separator);
@@ -69,8 +69,8 @@ impl<'a> Processor<'a> {
         }
     }
 
-    fn handle_edit_message(&self, id: i64, message: Message) -> BoxFuture {
-        let cmd = match Self::build_command(id, &message) {
+    fn handle_edit_message(&self, id: i64, message: &Message) -> BoxFuture {
+        let cmd = match Self::build_command(id, message) {
             Ok(cmd) => cmd,
             // XXX Can this happen at all? Can a text message becomes other types?
             Err(()) => return Box::new(Ok(()).into_future()),
@@ -84,7 +84,7 @@ impl<'a> Processor<'a> {
         let chat = message.chat.clone();
         let api = self.api.clone();
         let records = self.records.clone();
-        match self.executor.execute(cmd) {
+        match self.executor.execute(&cmd) {
             Some(future) => Box::new(future.then(move |reply| {
                 let reply = reply.unwrap();
                 let reply = reply.trim_matches(utils::is_separator);

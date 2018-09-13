@@ -7,7 +7,7 @@ use reqwest::StatusCode;
 use super::ExecutionContext;
 use utils;
 
-pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
+pub(super) fn run(ctx: &ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
     let name = ctx.args.trim().to_string();
     let name_url = utf8_percent_encode(&name, PATH_SEGMENT_ENCODE_SET).collect::<String>();
     let url = format!("https://crates.io/api/v1/crates/{}", name_url);
@@ -50,7 +50,7 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
             Some(StatusCode::NotFound) => Ok(format!("<b>{}</b> - not found", name)),
             _ => {
                 warn!("{:?}", err);
-                Err(utils::map_reqwest_error(err))
+                Err(utils::map_reqwest_error(&err))
             }
         })
 }

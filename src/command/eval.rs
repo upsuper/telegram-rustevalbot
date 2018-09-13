@@ -13,7 +13,7 @@ lazy_static! {
     static ref RE_ISSUE: Regex = Regex::new(r"\(see issue #(\d+)\)").unwrap();
 }
 
-pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
+pub(super) fn run(ctx: &ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
     let mut body = ctx.args;
     let mut channel = None;
     let mut edition = None;
@@ -61,9 +61,10 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
         .map(move |resp: Response| {
             if resp.success {
                 let output = resp.stdout.trim();
-                let output = match is_private {
-                    true => output.into(),
-                    false => truncate_output(output),
+                let output = if is_private {
+                    output.into()
+                } else {
+                    truncate_output(output)
                 };
                 if output.is_empty() {
                     return "(no output)".to_string();
@@ -115,7 +116,7 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
                 "(nothing??)".to_string()
             }
         })
-        .map_err(utils::map_reqwest_error)
+        .map_err(|e| utils::map_reqwest_error(&e))
 }
 
 #[derive(Debug, Serialize)]
@@ -153,7 +154,7 @@ pub enum Channel {
 }
 
 impl Channel {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Channel::Stable => "stable",
             Channel::Beta => "beta",
@@ -169,7 +170,7 @@ struct Response {
     success: bool,
 }
 
-fn truncate_output<'a>(output: &'a str) -> Cow<'a, str> {
+fn truncate_output(output: &str) -> Cow<str> {
     const MAX_LINES: usize = 3;
     const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
     let mut line_count = 0;

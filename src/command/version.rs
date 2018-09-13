@@ -4,7 +4,7 @@ use super::eval::Channel;
 use super::ExecutionContext;
 use utils;
 
-pub(super) fn run(ctx: ExecutionContext) -> Box<Future<Item = String, Error = &'static str>> {
+pub(super) fn run(ctx: &ExecutionContext) -> Box<Future<Item = String, Error = &'static str>> {
     let mut channel = Channel::Stable;
     match ctx.args.trim_matches(utils::is_separator) {
         "" => {}
@@ -24,7 +24,7 @@ pub(super) fn run(ctx: ExecutionContext) -> Box<Future<Item = String, Error = &'
         .and_then(|resp| resp.error_for_status())
         .and_then(|mut resp| resp.json())
         .map(|resp: Version| format!("rustc {} ({:.9} {})", resp.version, resp.hash, resp.date))
-        .map_err(utils::map_reqwest_error);
+        .map_err(|e| utils::map_reqwest_error(&e));
     Box::new(future)
 }
 

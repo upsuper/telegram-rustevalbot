@@ -47,12 +47,16 @@ impl RecordService {
 
     /// Set the reply message of the given record.
     pub fn set_reply(&mut self, msg: MessageId, reply: MessageId) {
-        self.find_record_mut(msg).map(|r| r.reply = Some(reply));
+        if let Some(r) = self.find_record_mut(msg) {
+            r.reply = Some(reply);
+        }
     }
 
     /// Remove the reply message of the given record.
     pub fn remove_reply(&mut self, msg: MessageId) {
-        self.find_record_mut(msg).map(|r| r.reply = None);
+        if let Some(r) = self.find_record_mut(msg) {
+            r.reply = None;
+        }
     }
 
     /// Clear records order than 48hrs before the given date.

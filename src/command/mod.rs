@@ -65,7 +65,7 @@ impl<'a> Executor<'a> {
     ///
     /// Future resolves to a message to send back. If nothing can be
     /// replied, it rejects.
-    pub fn execute(&self, cmd: Command) -> Option<BoxFutureStr> {
+    pub fn execute(&self, cmd: &Command) -> Option<BoxFutureStr> {
         if let Some(info) = self.parse_command(cmd.command) {
             let context = ExecutionContext {
                 client: &self.client,
@@ -73,18 +73,12 @@ impl<'a> Executor<'a> {
                 is_specific: cmd.is_private || info.at_self,
                 args: info.args,
             };
-            match execute_command(info.name, context) {
-                Some(result) => return Some(result),
-                None => {}
+            if let Some(result) = execute_command(info.name, &context) {
+                return Some(result);
             }
-            if cmd.is_private && cmd.is_admin {
-                match info.name {
-                    "/shutdown" => {
-                        super::SHUTDOWN.shutdown(Some(cmd.id));
-                        return Some(str_to_box_future("start shutting down..."));
-                    }
-                    _ => {}
-                }
+            if cmd.is_private && cmd.is_admin && info.name == "/shutdown" {
+                super::SHUTDOWN.shutdown(Some(cmd.id));
+                return Some(str_to_box_future("start shutting down..."));
             }
         }
         None
@@ -139,10 +133,10 @@ macro_rules! commands {
             }
         }
 
-        fn execute_command(name: &str, ctx: ExecutionContext) -> Option<BoxFutureStr> {
+        fn execute_command(name: &str, ctx: &ExecutionContext) -> Option<BoxFutureStr> {
             macro_rules! execute_mod {
                 ($mod:ident) => {{
-                    Some(Box::new($mod::run(ctx).then(|reply| {
+                    Some(Box::new($mod::run(&ctx).then(|reply| {
                         Ok(match reply {
                             Ok(reply) => reply.into(),
                             Err(err) => format!("error: {}", err).into(),

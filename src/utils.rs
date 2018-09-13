@@ -14,7 +14,7 @@ pub fn is_separator(c: char) -> bool {
     c.is_whitespace() || c.is_control()
 }
 
-pub fn map_reqwest_error(error: reqwest::Error) -> &'static str {
+pub fn map_reqwest_error(error: &reqwest::Error) -> &'static str {
     if error.is_http() || error.is_redirect() {
         "failed to request"
     } else if error.is_serialization() {

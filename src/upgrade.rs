@@ -9,7 +9,7 @@ pub fn init() {
     let (tx, rx) = mpsc::channel();
     let watcher = init_watcher(tx).expect("failed to init upgrade watcher");
     thread::spawn(move || {
-        watch_notify_file(watcher, rx);
+        watch_notify_file(&watcher, &rx);
     });
 }
 
@@ -19,16 +19,13 @@ fn init_watcher(tx: Sender<DebouncedEvent>) -> notify::Result<impl Watcher> {
     Ok(watcher)
 }
 
-fn watch_notify_file(_watcher: impl Watcher, rx: Receiver<DebouncedEvent>) {
+fn watch_notify_file(_watcher: &impl Watcher, rx: &Receiver<DebouncedEvent>) {
     for event in rx.iter() {
         debug!("notify: {:?}", event);
-        match event {
-            DebouncedEvent::NoticeWrite(_) => {
-                info!("notify detected");
-                super::SHUTDOWN.shutdown(None);
-                break;
-            }
-            _ => {}
+        if let DebouncedEvent::NoticeWrite(_) = event {
+            info!("notify detected");
+            super::SHUTDOWN.shutdown(None);
+            break;
         }
     }
 }

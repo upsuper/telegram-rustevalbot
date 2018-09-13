@@ -22,7 +22,7 @@ pub(super) fn init() {
     lazy_static::initialize(&SEEKER);
 }
 
-pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
+pub(super) fn run(ctx: &ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
     let path = ctx
         .args
         .split("::")
@@ -57,11 +57,11 @@ pub(super) fn run(ctx: ExecutionContext) -> impl Future<Item = String, Error = &
     matched_items.truncate(max_count);
     // Generate result.
     let mut result = String::new();
-    for item in matched_items.iter() {
+    for item in &matched_items {
         item.write_item(&mut result).unwrap();
         result.push('\n');
     }
-    return Ok(result).into_future();
+    Ok(result).into_future()
 }
 
 struct QueryPath<'a> {
