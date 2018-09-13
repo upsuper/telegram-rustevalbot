@@ -54,10 +54,9 @@ const USER_AGENT: &str = concat!(
 );
 
 lazy_static! {
-    static ref ADMIN_ID: Option<UserId> =
-        env::var("BOT_ADMIN_ID")
-            .ok()
-            .and_then(|s| str::parse(&s).map(UserId::new).ok());
+    static ref ADMIN_ID: Option<UserId> = env::var("BOT_ADMIN_ID")
+        .ok()
+        .and_then(|s| str::parse(&s).map(UserId::new).ok());
     static ref SHUTDOWN: shutdown::Shutdown = Default::default();
 }
 
@@ -86,8 +85,7 @@ fn init_logger() {
             };
             let write_args = writeln!(buf, "{}", record.args());
             write_header.and(write_module_path).and(write_args)
-        })
-        .init();
+        }).init();
 }
 
 fn main() -> Result<(), Error> {

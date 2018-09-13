@@ -115,8 +115,7 @@ pub(super) fn run(ctx: &ExecutionContext) -> impl Future<Item = String, Error = 
             } else {
                 "(nothing??)".to_string()
             }
-        })
-        .map_err(|e| utils::map_reqwest_error(&e))
+        }).map_err(|e| utils::map_reqwest_error(&e))
 }
 
 #[derive(Debug, Serialize)]

@@ -62,8 +62,7 @@ impl<'a> Processor<'a> {
                     .map(move |reply| {
                         debug!("{}> sent as {}", id, reply.id);
                         records.borrow_mut().set_reply(msg_id, reply.id);
-                    })
-                    .map_err(move |err| warn!("{}> error: {:?}", id, err))
+                    }).map_err(move |err| warn!("{}> error: {:?}", id, err))
             })),
             None => Box::new(Err(()).into_future()),
         }
