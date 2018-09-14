@@ -14,7 +14,7 @@ lazy_static! {
     static ref SEEKER: RustDocSeeker = {
         let data = fs::read_to_string("search-index.js").expect("cannot find search-index.js");
         let doc: RustDoc = data.parse().expect("cannot parse search-index.js");
-        doc.build().unwrap()
+        doc.build()
     };
 }
 
@@ -161,7 +161,7 @@ impl DocItemExt for DocItem {
     fn write_item(&self, output: &mut impl fmt::Write) -> fmt::Result {
         // Write link tag.
         output.write_str(r#"<a href="https://doc.rust-lang.org/"#)?;
-        write!(output, "{}", self)?;
+        self.fmt_url(output)?;
         output.write_str(r#"">"#)?;
         // Write full path.
         let ty = ItemType::from(&self.name);
