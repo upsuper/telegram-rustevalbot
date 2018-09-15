@@ -1,7 +1,7 @@
 use reqwest;
 use std::borrow::Cow;
 use std::fmt;
-use unicode_width::UnicodeWidthChar;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Void {}
@@ -52,6 +52,34 @@ pub fn truncate_output(output: &str, max_lines: usize, max_total_columns: usize)
         }
     }
     output.into()
+}
+
+/// A `Write` type which counts the total width written into the inner.
+pub struct WidthCountingWriter<W: fmt::Write> {
+    inner: W,
+    width: usize,
+}
+
+impl<W: fmt::Write> WidthCountingWriter<W> {
+    /// Create a `WidthCountWriter` with an inner `Write`.
+    pub fn new(inner: W) -> Self {
+        WidthCountingWriter {
+            inner,
+            width: 0,
+        }
+    }
+
+    /// Get the total unicode char width written into inner.
+    pub fn total_width(&self) -> usize {
+        self.width
+    }
+}
+
+impl<W: fmt::Write> fmt::Write for WidthCountingWriter<W> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.width += s.width_cjk();
+        self.inner.write_str(s)
+    }
 }
 
 #[cfg(test)]

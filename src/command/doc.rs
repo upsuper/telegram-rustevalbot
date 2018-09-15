@@ -3,12 +3,13 @@ use futures::{Future, IntoFuture};
 use htmlescape::encode_minimal;
 use lazy_static;
 use rustdoc_seeker::{DocItem, RustDoc, RustDocSeeker, TypeItem};
-use std::fmt;
+use std::fmt::{self, Write};
 use std::fs;
 use std::ops::Deref;
+use unicode_width::UnicodeWidthStr;
 
 use super::ExecutionContext;
-use utils;
+use utils::{self, WidthCountingWriter};
 
 lazy_static! {
     static ref SEEKER: RustDocSeeker = {
@@ -158,47 +159,52 @@ impl DocItemExt for DocItem {
             .all(|level| item_path.any(|l| l.contains(level)))
     }
 
-    fn write_item(&self, output: &mut impl fmt::Write) -> fmt::Result {
+    fn write_item(&self, mut output: &mut impl fmt::Write) -> fmt::Result {
         // Write link tag.
         output.write_str(r#"<a href="https://doc.rust-lang.org/"#)?;
         self.fmt_url(output)?;
         output.write_str(r#"">"#)?;
-        // Write full path.
+        // Write full path. We don't escape them and we pass them into
+        // WidthCountingWriter directly assuming they don't contain any
+        // HTML special characters.
         let ty = ItemType::from(&self.name);
-        if !ty.is_keyword_or_primitive() {
-            let is_parent_keyword_or_primitive = self
-                .parent
-                .as_ref()
-                .map_or(false, |p| ItemType::from(p).is_keyword_or_primitive());
-            if !is_parent_keyword_or_primitive {
-                write!(output, "{}::", self.path)?;
+        let path_width = {
+            let mut output = WidthCountingWriter::new(&mut output);
+            if !ty.is_keyword_or_primitive() {
+                let is_parent_keyword_or_primitive = self
+                    .parent
+                    .as_ref()
+                    .map_or(false, |p| ItemType::from(p).is_keyword_or_primitive());
+                if !is_parent_keyword_or_primitive {
+                    write!(output, "{}::", self.path)?;
+                }
             }
-        }
-        if let Some(parent) = &self.parent {
-            write!(output, "{}::", parent.as_ref())?;
-        }
-        output.write_str(self.name.as_ref())?;
-        if matches!(self.name, TypeItem::Macro(_)) {
-            output.write_char('!')?;
-        }
+            if let Some(parent) = &self.parent {
+                write!(output, "{}::", parent.as_ref())?;
+            }
+            output.write_str(self.name.as_ref())?;
+            if matches!(self.name, TypeItem::Macro(_)) {
+                output.write_char('!')?;
+            }
+            output.total_width()
+        };
         output.write_str("</a>")?;
-        match ty {
-            ItemType::Keyword => output.write_str(" (keyword)")?,
-            ItemType::Primitive => output.write_str(" (primitive type)")?,
-            _ => {}
-        }
+        let type_str = match ty {
+            ItemType::Keyword => " (keyword)",
+            ItemType::Primitive => " (primitive type)",
+            _ => "",
+        };
+        output.write_str(type_str)?;
         // Write description.
-        if !self.desc.is_empty() {
-            output.write_str(" - ")?;
-            const MAX_LEN: usize = 50;
-            if self.desc.len() > MAX_LEN {
-                // This assumes that we don't have non-ASCII character
-                // in descriptions.
-                output.write_str(&encode_minimal(&self.desc[..MAX_LEN - 3]))?;
-                output.write_str("...")?;
-            } else {
-                output.write_str(&encode_minimal(&self.desc))?;
-            }
+        const TOTAL_MAX_WIDTH: usize = 80;
+        const DESC_SEP: &str = " - ";
+        let written_width = path_width + type_str.width_cjk();
+        let remaining_len = TOTAL_MAX_WIDTH.checked_sub(written_width + DESC_SEP.len());
+        if !self.desc.is_empty() && remaining_len.is_some() {
+            let remaining_len = remaining_len.unwrap();
+            output.write_str(DESC_SEP)?;
+            let desc = utils::truncate_output(&self.desc, 1, remaining_len);
+            output.write_str(&encode_minimal(&desc))?;
         }
         Ok(())
     }
