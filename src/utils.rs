@@ -63,10 +63,7 @@ pub struct WidthCountingWriter<W: fmt::Write> {
 impl<W: fmt::Write> WidthCountingWriter<W> {
     /// Create a `WidthCountWriter` with an inner `Write`.
     pub fn new(inner: W) -> Self {
-        WidthCountingWriter {
-            inner,
-            width: 0,
-        }
+        WidthCountingWriter { inner, width: 0 }
     }
 
     /// Get the total unicode char width written into inner.
