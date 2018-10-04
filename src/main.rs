@@ -20,6 +20,7 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate signal_hook;
 #[cfg(test)]
 extern crate string_cache;
 extern crate telegram_bot;
@@ -35,6 +36,8 @@ mod utils;
 
 use futures::future::Either;
 use futures::{Future, Stream};
+use signal_hook::SIGTERM;
+use signal_hook::iterator::Signals;
 use std::cell::RefCell;
 use std::env;
 use std::io::Write;
@@ -88,10 +91,27 @@ fn init_logger() {
         }).init();
 }
 
+fn init_signal_handler() {
+    let signals = Signals::new(&[SIGTERM]).expect("failed to init signal handler");
+    thread::spawn(move || {
+        for signal in signals.forever() {
+            match signal {
+                SIGTERM => {
+                    info!("SIGTERM");
+                    SHUTDOWN.shutdown(None);
+                    break;
+                }
+                _ => unreachable!(),
+            }
+        }
+    });
+}
+
 fn main() -> Result<(), Error> {
     // We don't care if we fail to load .env file.
     let _ = dotenv::from_path(std::env::current_dir()?.join(".env"));
     init_logger();
+    init_signal_handler();
     upgrade::init();
     command::init();
 
