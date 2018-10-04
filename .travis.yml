@@ -38,5 +38,5 @@ after_success:
   - sftp -i /tmp/deploy_rsa
          -b ci/deploy.sftp
          -P 2222
-         rustevalbot@vps9.upsuper.org
+         rustevalbot@vps11.upsuper.org
   - rm /tmp/deploy_rsa
