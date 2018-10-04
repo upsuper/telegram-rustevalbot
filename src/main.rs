@@ -106,7 +106,7 @@ fn main() -> Result<(), Error> {
     let self_username = self_user.username.expect("No username?");
     info!("Authorized as @{}", self_username);
     // Build the command executor
-    let executor = command::Executor::new(&handle, &self_username);
+    let executor = command::Executor::new(&self_username);
     let processor = processor::Processor::new(api.clone(), executor);
     if let Some(id) = &*ADMIN_ID {
         api.spawn(id.text(format!("Start version: {} @{}", VERSION, self_username)));

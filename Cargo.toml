@@ -19,7 +19,7 @@ matches = "0.1"
 notify = "4.0"
 percent-encoding = "1.0"
 regex = "1.0"
-reqwest = { version = "0.8", features = ["unstable"] }
+reqwest = "0.9.2"
 rustdoc-seeker = "0.5.1"
 serde = "1.0"
 serde_derive = "1.0"

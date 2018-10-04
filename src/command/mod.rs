@@ -5,10 +5,9 @@ mod eval;
 mod version;
 
 use futures::{Future, IntoFuture};
-use reqwest::header::{Headers, UserAgent};
-use reqwest::unstable::async::Client;
+use reqwest::async::Client;
+use reqwest::header::{HeaderMap, USER_AGENT};
 use std::borrow::Cow;
-use tokio_core::reactor::Handle;
 use utils::{is_separator, Void};
 
 pub(super) fn init() {
@@ -51,13 +50,10 @@ type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void>>;
 
 impl<'a> Executor<'a> {
     /// Create new command executor.
-    pub fn new(handle: &Handle, username: &'a str) -> Self {
-        let mut headers = Headers::new();
-        headers.set(UserAgent::new(super::USER_AGENT));
-        let client = Client::builder()
-            .default_headers(headers)
-            .build(handle)
-            .unwrap();
+    pub fn new(username: &'a str) -> Self {
+        let mut headers = HeaderMap::new();
+        headers.insert(USER_AGENT, super::USER_AGENT.parse().unwrap());
+        let client = Client::builder().default_headers(headers).build().unwrap();
         Executor { client, username }
     }
 

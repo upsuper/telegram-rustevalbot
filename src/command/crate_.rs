@@ -46,7 +46,7 @@ pub(super) fn run(ctx: &ExecutionContext) -> impl Future<Item = String, Error = 
             }
             message
         }).or_else(move |err| match err.status() {
-            Some(StatusCode::NotFound) => Ok(format!("<b>{}</b> - not found", name)),
+            Some(StatusCode::NOT_FOUND) => Ok(format!("<b>{}</b> - not found", name)),
             _ => {
                 warn!("{:?}", err);
                 Err(utils::map_reqwest_error(&err))
