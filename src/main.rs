@@ -68,7 +68,9 @@ fn init_logger() {
     env_logger::Builder::from_env(env)
         .format(|buf, record| {
             let timestamp = buf.timestamp();
-            let write_header = write!(buf, "{:>5} {}: ", record.level(), timestamp);
+            let level = record.level();
+            let level_style = buf.default_level_style(level);
+            let write_header = write!(buf, "{:>5} {}: ", level_style.value(level), timestamp);
             let write_module_path = match record.module_path() {
                 None => Ok(()),
                 Some(mut module_path) => {
