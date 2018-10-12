@@ -36,8 +36,8 @@ mod utils;
 
 use futures::future::Either;
 use futures::{Future, Stream};
-use signal_hook::SIGTERM;
 use signal_hook::iterator::Signals;
+use signal_hook::SIGTERM;
 use std::cell::RefCell;
 use std::env;
 use std::io::Write;
