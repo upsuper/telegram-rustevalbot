@@ -8,7 +8,7 @@ use futures::{Future, IntoFuture};
 use reqwest::async::Client;
 use reqwest::header::{HeaderMap, USER_AGENT};
 use std::borrow::Cow;
-use utils::{is_separator, Void};
+use utils::Void;
 
 pub(super) fn init() {
     doc::init();
@@ -81,24 +81,27 @@ impl Executor {
     }
 
     fn parse_command<'s>(&self, s: &'s str) -> Option<CommandInfo<'s>> {
-        let (name, args) = match s.find(is_separator) {
-            Some(pos) => (&s[..pos], &s[pos + 1..]),
-            None => (s, ""),
+        use combine::parser::{
+            char::{alpha_num, spaces, string},
+            choice::optional,
+            item::{any, eof, item},
+            range::recognize,
+            repeat::{skip_many, skip_many1},
+            Parser,
         };
-        let (name, at_self) = match name.find('@') {
-            Some(pos) => {
-                if &name[pos + 1..] != self.username {
-                    return None;
-                }
-                (&name[..pos], true)
-            }
-            None => (name, false),
-        };
-        Some(CommandInfo {
-            name,
-            args,
-            at_self,
-        })
+        (
+            recognize((item('/'), skip_many1(alpha_num()))),
+            optional((item('@'), string(self.username))),
+            optional((spaces(), recognize(skip_many(any())))),
+            eof(),
+        )
+            .map(|(name, at_self, args, _)| CommandInfo {
+                name,
+                args: args.map(|(_, s)| s).unwrap_or(""),
+                at_self: at_self.is_some(),
+            }).parse(s)
+            .map(|(ci, _)| ci)
+            .ok()
     }
 }
 

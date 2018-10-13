@@ -1,3 +1,4 @@
+extern crate combine;
 extern crate dotenv;
 extern crate env_logger;
 extern crate fst;
