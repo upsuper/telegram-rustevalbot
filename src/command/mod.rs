@@ -15,11 +15,11 @@ pub(super) fn init() {
 }
 
 /// Command executor.
-pub struct Executor<'a> {
+pub struct Executor {
     /// Reqwest client
     client: Client,
     /// Telegram username of the bot
-    username: &'a str,
+    username: &'static str,
 }
 
 pub struct Command<'a> {
@@ -48,9 +48,9 @@ struct ExecutionContext<'a> {
 
 type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void>>;
 
-impl<'a> Executor<'a> {
+impl Executor {
     /// Create new command executor.
-    pub fn new(username: &'a str) -> Self {
+    pub fn new(username: &'static str) -> Self {
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, super::USER_AGENT.parse().unwrap());
         let client = Client::builder().default_headers(headers).build().unwrap();

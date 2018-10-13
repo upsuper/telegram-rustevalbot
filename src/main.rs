@@ -126,9 +126,10 @@ fn main() -> Result<(), Error> {
     let api = Api::configure(token).build(&handle)?;
     let self_user = core.run(api.send(GetMe))?;
     let self_username = self_user.username.expect("No username?");
+    let self_username: &'static str = Box::leak(self_username.into_boxed_str());
     info!("Authorized as @{}", self_username);
     // Build the command executor
-    let executor = command::Executor::new(&self_username);
+    let executor = command::Executor::new(self_username);
     let processor = processor::Processor::new(api.clone(), executor);
     if let Some(id) = &*ADMIN_ID {
         api.spawn(id.text(format!("Start version: {} @{}", VERSION, self_username)));

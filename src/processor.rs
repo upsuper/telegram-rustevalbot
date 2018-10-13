@@ -11,17 +11,17 @@ use record::RecordService;
 use utils;
 
 /// Processor for handling updates from Telegram.
-pub struct Processor<'a> {
+pub struct Processor {
     api: Api,
-    executor: Executor<'a>,
+    executor: Executor,
     records: Rc<RefCell<RecordService>>,
 }
 
 type BoxFuture = Box<dyn Future<Item = (), Error = ()>>;
 
-impl<'a> Processor<'a> {
+impl Processor {
     /// Create new Processor.
-    pub fn new(api: Api, executor: Executor<'a>) -> Self {
+    pub fn new(api: Api, executor: Executor) -> Self {
         Processor {
             api,
             executor,
