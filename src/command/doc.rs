@@ -34,13 +34,18 @@ lazy_static! {
 pub struct DocCommand;
 
 impl CommandImpl for DocCommand {
+    type Flags = ();
+
     fn init() {
         lazy_static::initialize(&SEEKER);
     }
 
-    fn run(ctx: &ExecutionContext) -> Box<dyn Future<Item = String, Error = &'static str>> {
-        let path = ctx
-            .args
+    fn run(
+        ctx: &ExecutionContext,
+        _flags: &(),
+        arg: &str,
+    ) -> Box<dyn Future<Item = String, Error = &'static str>> {
+        let path = arg
             .split("::")
             .map(|s| s.trim_matches(utils::is_separator))
             .filter(|s| !s.is_empty())

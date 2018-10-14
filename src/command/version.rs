@@ -1,4 +1,4 @@
-use futures::{Future, IntoFuture};
+use futures::Future;
 
 use super::eval::Channel;
 use super::{CommandImpl, ExecutionContext};
@@ -7,18 +7,28 @@ use utils;
 pub struct VersionCommand;
 
 impl CommandImpl for VersionCommand {
-    fn run(ctx: &ExecutionContext) -> Box<dyn Future<Item = String, Error = &'static str>> {
-        let mut channel = Channel::Stable;
-        match ctx.args.trim_matches(utils::is_separator) {
-            "" => {}
-            "--stable" => channel = Channel::Stable,
-            "--beta" => channel = Channel::Beta,
-            "--nightly" => channel = Channel::Nightly,
-            _ => return Box::new(Err("unknown argument").into_future()),
+    impl_command_methods! {
+        (channel: Option<Channel>) {
+            ("--stable", "check stable channel") {
+                *channel = Some(Channel::Stable);
+            }
+            ("--beta", "check beta channel") {
+                *channel = Some(Channel::Beta);
+            }
+            ("--nightly", "check nightly channel") {
+                *channel = Some(Channel::Nightly);
+            }
         }
+    }
+
+    fn run(
+        ctx: &ExecutionContext,
+        channel: &Option<Channel>,
+        _arg: &str,
+    ) -> Box<dyn Future<Item = String, Error = &'static str>> {
         let url = format!(
             "https://play.rust-lang.org/meta/version/{}",
-            channel.as_str(),
+            channel.unwrap_or(Channel::Stable).as_str(),
         );
         let future = ctx
             .client

@@ -10,8 +10,14 @@ use utils;
 pub struct CrateCommand;
 
 impl CommandImpl for CrateCommand {
-    fn run(ctx: &ExecutionContext) -> Box<dyn Future<Item = String, Error = &'static str>> {
-        let name = ctx.args.trim().to_string();
+    type Flags = ();
+
+    fn run(
+        ctx: &ExecutionContext,
+        _flags: &(),
+        arg: &str,
+    ) -> Box<dyn Future<Item = String, Error = &'static str>> {
+        let name = arg.trim().to_string();
         let name_url = utf8_percent_encode(&name, PATH_SEGMENT_ENCODE_SET).collect::<String>();
         let url = format!("https://crates.io/api/v1/crates/{}", name_url);
         let future = ctx

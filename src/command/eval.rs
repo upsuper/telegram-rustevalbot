@@ -13,41 +13,60 @@ lazy_static! {
 
 pub struct EvalCommand;
 
-impl CommandImpl for EvalCommand {
-    fn run(ctx: &ExecutionContext) -> Box<dyn Future<Item = String, Error = &'static str>> {
-        let mut body = ctx.args;
-        let mut channel = None;
-        let mut edition = None;
-        let mut mode = None;
-        let mut bare = false;
-        loop {
-            body = body.trim_left_matches(utils::is_separator);
-            let flag = body.split(utils::is_separator).next().unwrap_or("");
-            match flag {
-                "--stable" => channel = Some(Channel::Stable),
-                "--beta" => channel = Some(Channel::Beta),
-                "--nightly" => channel = Some(Channel::Nightly),
-                "--2015" => edition = Some("2015"),
-                "--2018" => edition = Some("2018"),
-                "--debug" => mode = Some(Mode::Debug),
-                "--release" => mode = Some(Mode::Release),
-                "--bare" => bare = true,
-                _ => break,
-            }
-            body = &body[flag.len()..];
-        }
+#[derive(Debug, Default)]
+pub struct Flags {
+    channel: Option<Channel>,
+    edition: Option<&'static str>,
+    mode: Option<Mode>,
+    bare: bool,
+}
 
+impl CommandImpl for EvalCommand {
+    impl_command_methods! {
+        (flags: Flags) {
+            ("--stable", "use stable channel") {
+                flags.channel = Some(Channel::Stable);
+            }
+            ("--beta", "use beta channel") {
+                flags.channel = Some(Channel::Beta);
+            }
+            ("--nightly", "use nightly channel") {
+                flags.channel = Some(Channel::Nightly);
+            }
+            ("--2015", "use 2015 edition") {
+                flags.edition = Some("2015");
+            }
+            ("--2018", "use 2018 edition") {
+                flags.edition = Some("2018");
+            }
+            ("--debug", "do debug build") {
+                flags.mode = Some(Mode::Debug);
+            }
+            ("--release", "do release build") {
+                flags.mode = Some(Mode::Release);
+            }
+            ("--bare", "don't add any wrapping code") {
+                flags.bare = true;
+            }
+        }
+    }
+
+    fn run(
+        ctx: &ExecutionContext,
+        flags: &Flags,
+        arg: &str,
+    ) -> Box<dyn Future<Item = String, Error = &'static str>> {
         let is_private = ctx.is_private;
-        let code = if bare {
-            body.to_string()
+        let code = if flags.bare {
+            arg.to_string()
         } else {
-            format!(include_str!("eval_template.rs"), code = body)
+            format!(include_str!("eval_template.rs"), code = arg)
         };
-        let channel = channel.unwrap_or(Channel::Stable);
+        let channel = flags.channel.unwrap_or(Channel::Stable);
         let req = Request {
             channel,
-            edition,
-            mode: mode.unwrap_or(Mode::Debug),
+            edition: flags.edition,
+            mode: flags.mode.unwrap_or(Mode::Debug),
             crate_type: CrateType::Bin,
             tests: false,
             backtrace: false,

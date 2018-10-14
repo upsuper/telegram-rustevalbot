@@ -1,13 +1,8 @@
-mod about;
-mod crate_;
-mod doc;
-mod eval;
-mod version;
-
 use futures::{Future, IntoFuture};
 use reqwest::async::Client;
 use reqwest::header::{HeaderMap, USER_AGENT};
 use std::borrow::Cow;
+use std::fmt::{self, Debug, Formatter};
 use utils::Void;
 
 /// Command executor.
@@ -39,7 +34,6 @@ struct ExecutionContext<'a> {
     client: &'a Client,
     is_private: bool,
     is_specific: bool,
-    args: &'a str,
 }
 
 type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void>>;
@@ -63,9 +57,8 @@ impl Executor {
                 client: &self.client,
                 is_private: cmd.is_private,
                 is_specific: cmd.is_private || info.at_self,
-                args: info.args,
             };
-            if let Some(result) = execute_command(info.name, &context) {
+            if let Some(result) = execute_command_with_name(info.name, &context, info.args) {
                 return Some(result);
             }
             if cmd.is_private && cmd.is_admin && info.name == "/shutdown" {
@@ -106,13 +99,59 @@ fn str_to_box_future(s: &'static str) -> BoxFutureStr {
 }
 
 trait CommandImpl {
+    type Flags: Debug + Default;
+
     #[inline]
     fn init() {}
 
+    /// Returns the help message.
+    fn help() -> &'static str {
+        ""
+    }
+
+    /// Parses the given flag and add into flags. Returns whether the flag is
+    /// recognized.
+    fn add_flag(_flags: &mut Self::Flags, _flag: &str) -> bool {
+        false
+    }
+
     // XXX Trait functions cannot return `impl Trait`.
     // Hopefully in the future we can use `async fn` here.
-    fn run(ctx: &ExecutionContext) -> Box<dyn Future<Item = String, Error = &'static str>>;
+    fn run(
+        ctx: &ExecutionContext,
+        flags: &Self::Flags,
+        arg: &str,
+    ) -> Box<dyn Future<Item = String, Error = &'static str>>;
 }
+
+macro_rules! impl_command_methods {
+    (($flags:ident: $flags_ty:ty) {
+        $(($flag:expr, $help:expr) $code:block)*
+    }) => {
+        type Flags = $flags_ty;
+
+        fn help() -> &'static str {
+            concat!(
+                $("<code>", $flag, "</code> - ", $help, "\n",)*
+                "<code>--help</code> - show this information",
+            )
+        }
+
+        fn add_flag($flags: &mut $flags_ty, flag: &str) -> bool {
+            match flag {
+                $($flag => $code,)+
+                _ => return false,
+            }
+            true
+        }
+    }
+}
+
+mod about;
+mod crate_;
+mod doc;
+mod eval;
+mod version;
 
 macro_rules! commands {
     {
@@ -142,20 +181,17 @@ macro_rules! commands {
             }
         }
 
-        fn execute_command(name: &str, ctx: &ExecutionContext) -> Option<BoxFutureStr> {
-            macro_rules! execute_mod {
-                ($ty:ty) => {{
-                    Some(Box::new(<$ty>::run(&ctx).then(|reply| {
-                        Ok(match reply {
-                            Ok(reply) => reply.into(),
-                            Err(err) => format!("error: {}", err).into(),
-                        })
-                    })))
-                }}
+        fn execute_command_with_name(
+            name: &str,
+            ctx: &ExecutionContext,
+            args: &str,
+        ) -> Option<BoxFutureStr> {
+            macro_rules! execute {
+                ($ty:ty) => { Some(execute_command::<$ty>(ctx, args)) }
             }
             match name {
-                $($cmd_g => execute_mod!($ty_g),)+
-                $($cmd_s if ctx.is_specific => execute_mod!($ty_s),)+
+                $($cmd_g => execute!($ty_g),)+
+                $($cmd_s if ctx.is_specific => execute!($ty_s),)+
                 "/help" if ctx.is_specific => {
                     Some(str_to_box_future(display_help(ctx.is_private)))
                 }
@@ -163,6 +199,81 @@ macro_rules! commands {
             }
         }
     }
+}
+
+struct FlagsBuilder<Impl: CommandImpl> {
+    flags: Impl::Flags,
+    help: bool,
+    error: bool,
+}
+
+impl<Impl: CommandImpl> Debug for FlagsBuilder<Impl> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        f.write_str("FlagsBuilder(")?;
+        if self.error {
+            f.write_str("error")?;
+        } else if self.help {
+            f.write_str("help")?;
+        } else {
+            write!(f, "{:?}", self.flags)?;
+        }
+        f.write_str(")")
+    }
+}
+
+impl<Impl: CommandImpl> Default for FlagsBuilder<Impl> {
+    fn default() -> Self {
+        FlagsBuilder {
+            flags: Default::default(),
+            help: false,
+            error: false,
+        }
+    }
+}
+
+impl<'a, Impl: CommandImpl> Extend<&'a str> for FlagsBuilder<Impl> {
+    fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = &'a str>,
+    {
+        if !self.error {
+            self.error = !iter.into_iter().all(|flag| match flag {
+                "--help" => {
+                    self.help = true;
+                    true
+                }
+                _ => Impl::add_flag(&mut self.flags, flag),
+            });
+        }
+    }
+}
+
+fn execute_command<Impl: CommandImpl>(ctx: &ExecutionContext, args: &str) -> BoxFutureStr {
+    use combine::parser::{
+        char::{alpha_num, spaces, string},
+        range::recognize,
+        repeat::{many, skip_many1},
+        Parser,
+    };
+    let flag_parser = recognize((string("--"), skip_many1(alpha_num())));
+    let parsing_result =
+        many::<FlagsBuilder<Impl>, _>((flag_parser, spaces()).map(|(f, _)| f)).parse(args);
+    debug!("parsed: {:?}", parsing_result);
+    let (flags, remaining) = match &parsing_result {
+        Ok((builder, remaining)) if !builder.error => {
+            if builder.help {
+                return str_to_box_future(Impl::help());
+            }
+            (&builder.flags, remaining)
+        }
+        _ => return str_to_box_future("error: unable to parse the command"),
+    };
+    Box::new(Impl::run(&ctx, flags, remaining).then(|reply| {
+        Ok(match reply {
+            Ok(reply) => reply.into(),
+            Err(err) => format!("error: {}", err).into(),
+        })
+    }))
 }
 
 commands! {
