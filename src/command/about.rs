@@ -1,13 +1,18 @@
 use futures::{Future, IntoFuture};
 
-use super::ExecutionContext;
-use utils::Void;
+use super::{CommandImpl, ExecutionContext};
 
-pub(super) fn run(_ctx: &ExecutionContext) -> impl Future<Item = String, Error = Void> {
-    Ok(format!(
-        "{} {}\n{}",
-        env!("CARGO_PKG_NAME"),
-        ::VERSION,
-        env!("CARGO_PKG_HOMEPAGE")
-    )).into_future()
+pub struct AboutCommand;
+
+impl CommandImpl for AboutCommand {
+    fn run(_ctx: &ExecutionContext) -> Box<dyn Future<Item = String, Error = &'static str>> {
+        Box::new(
+            Ok(format!(
+                "{} {}\n{}",
+                env!("CARGO_PKG_NAME"),
+                ::VERSION,
+                env!("CARGO_PKG_HOMEPAGE")
+            )).into_future(),
+        )
+    }
 }

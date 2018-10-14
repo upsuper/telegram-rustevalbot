@@ -10,10 +10,6 @@ use reqwest::header::{HeaderMap, USER_AGENT};
 use std::borrow::Cow;
 use utils::Void;
 
-pub(super) fn init() {
-    doc::init();
-}
-
 /// Command executor.
 pub struct Executor {
     /// Reqwest client
@@ -109,15 +105,29 @@ fn str_to_box_future(s: &'static str) -> BoxFutureStr {
     Box::new(Ok(s.into()).into_future())
 }
 
+trait CommandImpl {
+    #[inline]
+    fn init() {}
+
+    // XXX Trait functions cannot return `impl Trait`.
+    // Hopefully in the future we can use `async fn` here.
+    fn run(ctx: &ExecutionContext) -> Box<dyn Future<Item = String, Error = &'static str>>;
+}
+
 macro_rules! commands {
     {
         general: [
-            $($cmd_g:expr => $mod_g:ident / $desc_g:expr,)+
+            $($cmd_g:expr => $ty_g:ty: $desc_g:expr,)+
         ];
         specific: [
-            $($cmd_s:expr => $mod_s:ident / $desc_s:expr,)+
+            $($cmd_s:expr => $ty_s:ty: $desc_s:expr,)+
         ];
     } => {
+        pub(super) fn init() {
+            $(<$ty_g>::init();)+
+            $(<$ty_s>::init();)+
+        }
+
         fn display_help(is_private: bool) -> &'static str {
             if is_private {
                 concat!(
@@ -134,8 +144,8 @@ macro_rules! commands {
 
         fn execute_command(name: &str, ctx: &ExecutionContext) -> Option<BoxFutureStr> {
             macro_rules! execute_mod {
-                ($mod:ident) => {{
-                    Some(Box::new($mod::run(&ctx).then(|reply| {
+                ($ty:ty) => {{
+                    Some(Box::new(<$ty>::run(&ctx).then(|reply| {
                         Ok(match reply {
                             Ok(reply) => reply.into(),
                             Err(err) => format!("error: {}", err).into(),
@@ -144,8 +154,8 @@ macro_rules! commands {
                 }}
             }
             match name {
-                $($cmd_g => execute_mod!($mod_g),)+
-                $($cmd_s if ctx.is_specific => execute_mod!($mod_s),)+
+                $($cmd_g => execute_mod!($ty_g),)+
+                $($cmd_s if ctx.is_specific => execute_mod!($ty_s),)+
                 "/help" if ctx.is_specific => {
                     Some(str_to_box_future(display_help(ctx.is_private)))
                 }
@@ -157,13 +167,13 @@ macro_rules! commands {
 
 commands! {
     general: [
-        "/crate" => crate_ / "query crate information",
-        "/doc" => doc / "query document of Rust's standard library",
-        "/eval" => eval / "evaluate a piece of Rust code",
-        "/rustc_version" => version / "display rustc version being used",
+        "/crate" => crate_::CrateCommand: "query crate information",
+        "/doc" => doc::DocCommand: "query document of Rust's standard library",
+        "/eval" => eval::EvalCommand: "evaluate a piece of Rust code",
+        "/rustc_version" => version::VersionCommand: "display rustc version being used",
     ];
     specific: [
-        "/version" => version / "display rustc version being used",
-        "/about" => about / "display information about this bot",
+        "/version" => version::VersionCommand: "display rustc version being used",
+        "/about" => about::AboutCommand: "display information about this bot",
     ];
 }

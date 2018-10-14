@@ -8,7 +8,7 @@ use std::fs;
 use std::ops::Deref;
 use unicode_width::UnicodeWidthStr;
 
-use super::ExecutionContext;
+use super::{CommandImpl, ExecutionContext};
 use utils::{self, WidthCountingWriter};
 
 lazy_static! {
@@ -31,50 +31,54 @@ lazy_static! {
     };
 }
 
-pub(super) fn init() {
-    lazy_static::initialize(&SEEKER);
-}
+pub struct DocCommand;
 
-pub(super) fn run(ctx: &ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
-    let path = ctx
-        .args
-        .split("::")
-        .map(|s| s.trim_matches(utils::is_separator))
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>();
-    let QueryPath { root, path, name } = match split_path(&path) {
-        Some(query) => query,
-        None => return Ok("(empty query)".to_string()).into_future(),
-    };
-    let lowercase_name = name.to_ascii_lowercase();
-    let mut matched_items = SEEKER
-        .search(&SubseqAsciiCaseless::new(&lowercase_name))
-        .filter(|item| item.matches_path(root, path))
-        .collect::<Vec<_>>();
-    if matched_items.is_empty() {
-        return Ok("(empty result)".to_string()).into_future();
+impl CommandImpl for DocCommand {
+    fn init() {
+        lazy_static::initialize(&SEEKER);
     }
-    // Sort items.
-    matched_items.sort_by_key(|item| {
-        (
-            item.name.as_ref().len(),
-            // Prefer items with description.
-            item.desc.is_empty(),
-            ItemType::from(&item.name),
-            &item.path,
-            item.parent.as_ref().map(|p| p.as_ref()),
-        )
-    });
-    // Return only limited number of results.
-    let max_count = if ctx.is_private { 10 } else { 3 };
-    matched_items.truncate(max_count);
-    // Generate result.
-    let mut result = String::new();
-    for item in &matched_items {
-        item.write_item(&mut result).unwrap();
-        result.push('\n');
+
+    fn run(ctx: &ExecutionContext) -> Box<dyn Future<Item = String, Error = &'static str>> {
+        let path = ctx
+            .args
+            .split("::")
+            .map(|s| s.trim_matches(utils::is_separator))
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
+        let QueryPath { root, path, name } = match split_path(&path) {
+            Some(query) => query,
+            None => return Box::new(Ok("(empty query)".to_string()).into_future()),
+        };
+        let lowercase_name = name.to_ascii_lowercase();
+        let mut matched_items = SEEKER
+            .search(&SubseqAsciiCaseless::new(&lowercase_name))
+            .filter(|item| item.matches_path(root, path))
+            .collect::<Vec<_>>();
+        if matched_items.is_empty() {
+            return Box::new(Ok("(empty result)".to_string()).into_future());
+        }
+        // Sort items.
+        matched_items.sort_by_key(|item| {
+            (
+                item.name.as_ref().len(),
+                // Prefer items with description.
+                item.desc.is_empty(),
+                ItemType::from(&item.name),
+                &item.path,
+                item.parent.as_ref().map(|p| p.as_ref()),
+            )
+        });
+        // Return only limited number of results.
+        let max_count = if ctx.is_private { 10 } else { 3 };
+        matched_items.truncate(max_count);
+        // Generate result.
+        let mut result = String::new();
+        for item in &matched_items {
+            item.write_item(&mut result).unwrap();
+            result.push('\n');
+        }
+        Box::new(Ok(result).into_future())
     }
-    Ok(result).into_future()
 }
 
 struct QueryPath<'a> {

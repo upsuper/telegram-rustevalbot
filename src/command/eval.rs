@@ -2,7 +2,7 @@ use futures::Future;
 use htmlescape::{encode_attribute, encode_minimal};
 use regex::{Captures, Regex};
 
-use super::ExecutionContext;
+use super::{CommandImpl, ExecutionContext};
 use utils;
 
 lazy_static! {
@@ -11,111 +11,117 @@ lazy_static! {
     static ref RE_ISSUE: Regex = Regex::new(r"\(see issue #(\d+)\)").unwrap();
 }
 
-pub(super) fn run(ctx: &ExecutionContext) -> impl Future<Item = String, Error = &'static str> {
-    let mut body = ctx.args;
-    let mut channel = None;
-    let mut edition = None;
-    let mut mode = None;
-    let mut bare = false;
-    loop {
-        body = body.trim_left_matches(utils::is_separator);
-        let flag = body.split(utils::is_separator).next().unwrap_or("");
-        match flag {
-            "--stable" => channel = Some(Channel::Stable),
-            "--beta" => channel = Some(Channel::Beta),
-            "--nightly" => channel = Some(Channel::Nightly),
-            "--2015" => edition = Some("2015"),
-            "--2018" => edition = Some("2018"),
-            "--debug" => mode = Some(Mode::Debug),
-            "--release" => mode = Some(Mode::Release),
-            "--bare" => bare = true,
-            _ => break,
-        }
-        body = &body[flag.len()..];
-    }
+pub struct EvalCommand;
 
-    let is_private = ctx.is_private;
-    let code = if bare {
-        body.to_string()
-    } else {
-        format!(include_str!("eval_template.rs"), code = body)
-    };
-    let channel = channel.unwrap_or(Channel::Stable);
-    let req = Request {
-        channel,
-        edition,
-        mode: mode.unwrap_or(Mode::Debug),
-        crate_type: CrateType::Bin,
-        tests: false,
-        backtrace: false,
-        code,
-    };
-    ctx.client
-        .post("https://play.rust-lang.org/execute")
-        .json(&req)
-        .send()
-        .and_then(|resp| resp.error_for_status())
-        .and_then(|mut resp| resp.json())
-        .map(move |resp: Response| {
-            if resp.success {
-                let output = resp.stdout.trim();
-                let output = if is_private {
-                    output.into()
+impl CommandImpl for EvalCommand {
+    fn run(ctx: &ExecutionContext) -> Box<dyn Future<Item = String, Error = &'static str>> {
+        let mut body = ctx.args;
+        let mut channel = None;
+        let mut edition = None;
+        let mut mode = None;
+        let mut bare = false;
+        loop {
+            body = body.trim_left_matches(utils::is_separator);
+            let flag = body.split(utils::is_separator).next().unwrap_or("");
+            match flag {
+                "--stable" => channel = Some(Channel::Stable),
+                "--beta" => channel = Some(Channel::Beta),
+                "--nightly" => channel = Some(Channel::Nightly),
+                "--2015" => edition = Some("2015"),
+                "--2018" => edition = Some("2018"),
+                "--debug" => mode = Some(Mode::Debug),
+                "--release" => mode = Some(Mode::Release),
+                "--bare" => bare = true,
+                _ => break,
+            }
+            body = &body[flag.len()..];
+        }
+
+        let is_private = ctx.is_private;
+        let code = if bare {
+            body.to_string()
+        } else {
+            format!(include_str!("eval_template.rs"), code = body)
+        };
+        let channel = channel.unwrap_or(Channel::Stable);
+        let req = Request {
+            channel,
+            edition,
+            mode: mode.unwrap_or(Mode::Debug),
+            crate_type: CrateType::Bin,
+            tests: false,
+            backtrace: false,
+            code,
+        };
+        let future = ctx
+            .client
+            .post("https://play.rust-lang.org/execute")
+            .json(&req)
+            .send()
+            .and_then(|resp| resp.error_for_status())
+            .and_then(|mut resp| resp.json())
+            .map(move |resp: Response| {
+                if resp.success {
+                    let output = resp.stdout.trim();
+                    let output = if is_private {
+                        output.into()
+                    } else {
+                        const MAX_LINES: usize = 3;
+                        const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
+                        utils::truncate_output(output, MAX_LINES, MAX_TOTAL_COLUMNS)
+                    };
+                    if output.is_empty() {
+                        return "(no output)".to_string();
+                    }
+                    return format!("<pre>{}</pre>", encode_minimal(&output));
+                }
+                let mut return_line: Option<&str> = None;
+                for line in resp.stderr.split('\n') {
+                    let line = line.trim();
+                    if line.starts_with("Compiling")
+                        || line.starts_with("Finished")
+                        || line.starts_with("Running")
+                    {
+                        continue;
+                    }
+                    if line.starts_with("error") {
+                        return_line = Some(line);
+                        break;
+                    }
+                    if return_line.is_none() {
+                        return_line = Some(line);
+                    }
+                }
+                if let Some(line) = return_line {
+                    let line = encode_minimal(line);
+                    let line = RE_ERROR.replacen(&line, 1, |captures: &Captures| {
+                        let err_num = captures.get(1).unwrap().as_str();
+                        let url = format!(
+                            "https://doc.rust-lang.org/{}/error-index.html#{}",
+                            channel.as_str(),
+                            err_num,
+                        );
+                        format!(
+                            r#"error<a href="{}">[{}]</a>:"#,
+                            encode_attribute(&url),
+                            err_num,
+                        )
+                    });
+                    let line = RE_CODE.replace_all(&line, |captures: &Captures| {
+                        format!("<code>{}</code>", captures.get(1).unwrap().as_str())
+                    });
+                    let line = RE_ISSUE.replacen(&line, 1, |captures: &Captures| {
+                        let issue_num = captures.get(1).unwrap().as_str();
+                        let url = format!("https://github.com/rust-lang/rust/issues/{}", issue_num);
+                        format!(r#"(see issue <a href="{}">#{}</a>)"#, url, issue_num)
+                    });
+                    format!("{}", line)
                 } else {
-                    const MAX_LINES: usize = 3;
-                    const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
-                    utils::truncate_output(output, MAX_LINES, MAX_TOTAL_COLUMNS)
-                };
-                if output.is_empty() {
-                    return "(no output)".to_string();
+                    "(nothing??)".to_string()
                 }
-                return format!("<pre>{}</pre>", encode_minimal(&output));
-            }
-            let mut return_line: Option<&str> = None;
-            for line in resp.stderr.split('\n') {
-                let line = line.trim();
-                if line.starts_with("Compiling")
-                    || line.starts_with("Finished")
-                    || line.starts_with("Running")
-                {
-                    continue;
-                }
-                if line.starts_with("error") {
-                    return_line = Some(line);
-                    break;
-                }
-                if return_line.is_none() {
-                    return_line = Some(line);
-                }
-            }
-            if let Some(line) = return_line {
-                let line = encode_minimal(line);
-                let line = RE_ERROR.replacen(&line, 1, |captures: &Captures| {
-                    let err_num = captures.get(1).unwrap().as_str();
-                    let url = format!(
-                        "https://doc.rust-lang.org/{}/error-index.html#{}",
-                        channel.as_str(),
-                        err_num,
-                    );
-                    format!(
-                        r#"error<a href="{}">[{}]</a>:"#,
-                        encode_attribute(&url),
-                        err_num,
-                    )
-                });
-                let line = RE_CODE.replace_all(&line, |captures: &Captures| {
-                    format!("<code>{}</code>", captures.get(1).unwrap().as_str())
-                });
-                let line = RE_ISSUE.replacen(&line, 1, |captures: &Captures| {
-                    let issue_num = captures.get(1).unwrap().as_str();
-                    let url = format!("https://github.com/rust-lang/rust/issues/{}", issue_num);
-                    format!(r#"(see issue <a href="{}">#{}</a>)"#, url, issue_num)
-                });
-                format!("{}", line)
-            } else {
-                "(nothing??)".to_string()
-            }
-        }).map_err(|e| utils::map_reqwest_error(&e))
+            }).map_err(|e| utils::map_reqwest_error(&e));
+        Box::new(future)
+    }
 }
 
 #[derive(Debug, Serialize)]
