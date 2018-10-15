@@ -60,7 +60,9 @@ impl CommandImpl for EvalCommand {
         let code = if flags.bare {
             arg.to_string()
         } else {
-            format!(include_str!("eval_template.rs"), code = arg)
+            let (header, body) = extract_code_headers(arg);
+            debug!("extract: {:?} -> ({:?}, {:?})", arg, header, body);
+            format!(include_str!("eval_template.rs"), header = header, code = body)
         };
         let channel = flags.channel.unwrap_or(Channel::Stable);
         let req = Request {
@@ -192,4 +194,88 @@ struct Response {
     stderr: String,
     stdout: String,
     success: bool,
+}
+
+fn extract_code_headers<'a>(code: &'a str) -> (&'a str, &'a str) {
+    use combine::parser::{
+        char::{alpha_num, space, spaces, string},
+        choice::choice,
+        combinator::{attempt, ignore},
+        item::{item, none_of},
+        range::recognize,
+        repeat::{skip_many, skip_many1},
+        Parser,
+    };
+    use std::iter::once;
+    let spaces1 = || (space(), spaces());
+    recognize((
+        spaces(),
+        skip_many((
+            choice((
+                attempt(ignore((
+                    skip_many((
+                        item('#'),
+                        spaces(),
+                        item('['),
+                        skip_many(none_of(once(']'))),
+                        item(']'),
+                        spaces(),
+                    )),
+                    string("extern"),
+                    spaces1(),
+                    string("crate"),
+                    spaces1(),
+                    skip_many1(choice((alpha_num(), item('_')))),
+                    spaces(),
+                    item(';'),
+                ))),
+                attempt(ignore((
+                    item('#'),
+                    spaces(),
+                    item('!'),
+                    spaces(),
+                    item('['),
+                    skip_many(none_of(once(']'))),
+                    item(']'),
+                ))),
+            )),
+            spaces(),
+        )),
+    )).parse(code).unwrap_or_else(|_| {
+        debug_assert!(false, "extract_code_headers should always succeed");
+        warn!("failed to split code: {}", code);
+        ("", code)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_code_headers() {
+        let tests = &[
+            (
+                "#![feature(test)]\n\
+                 #[macro_use] extern crate lazy_static;\n\
+                 extern crate a_crate;\n",
+                "1 + 1",
+            ),
+            (
+                "  #\n!  \n [  feature(test)   ]  \
+                 #  [ macro_use \r]extern crate lazy_static;\n\
+                 extern \n\ncrate\r\r a_crate;",
+                "1 + 1",
+            ),
+            ("", "externcrate a;"),
+            ("", "extern cratea;"),
+            ("", "extern crate a-b;"),
+            ("", "extern crate ab"),
+        ];
+        for &(header, body) in tests {
+            let code = format!("{}{}", header, body);
+            let result = extract_code_headers(&code);
+            assert_eq!(result, (header, body));
+        }
+    }
 }
