@@ -62,7 +62,11 @@ impl CommandImpl for EvalCommand {
         } else {
             let (header, body) = extract_code_headers(arg);
             debug!("extract: {:?} -> ({:?}, {:?})", arg, header, body);
-            format!(include_str!("eval_template.rs"), header = header, code = body)
+            format!(
+                include_str!("eval_template.rs"),
+                header = header,
+                code = body,
+            )
         };
         let channel = flags.channel.unwrap_or(Channel::Stable);
         let req = Request {
@@ -241,7 +245,8 @@ fn extract_code_headers<'a>(code: &'a str) -> (&'a str, &'a str) {
             )),
             spaces(),
         )),
-    )).parse(code).unwrap_or_else(|_| {
+    )).parse(code)
+    .unwrap_or_else(|_| {
         debug_assert!(false, "extract_code_headers should always succeed");
         warn!("failed to split code: {}", code);
         ("", code)
