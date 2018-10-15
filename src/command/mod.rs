@@ -261,7 +261,14 @@ impl<'a, Impl: CommandImpl> Extend<&'a str> for FlagsBuilder<Impl> {
     }
 }
 
-fn execute_command<Impl: CommandImpl>(ctx: &ExecutionContext, args: &str) -> BoxFutureStr {
+#[derive(Debug, PartialEq)]
+enum CommandParseResult<'a, Flags> {
+    Normal(Flags, &'a str),
+    Help,
+    Error,
+}
+
+fn parse_command_flags<Impl: CommandImpl>(args: &str) -> CommandParseResult<Impl::Flags> {
     use combine::parser::{
         char::{alpha_num, spaces, string},
         range::recognize,
@@ -271,20 +278,90 @@ fn execute_command<Impl: CommandImpl>(ctx: &ExecutionContext, args: &str) -> Box
     let flag_parser = recognize((string("--"), skip_many1(alpha_num())));
     let parsing_result =
         many::<FlagsBuilder<Impl>, _>((flag_parser, spaces()).map(|(f, _)| f)).parse(args);
-    debug!("parsed: {:?}", parsing_result);
-    let (flags, remaining) = match &parsing_result {
-        Ok((builder, remaining)) if !builder.error => {
-            if builder.help {
-                return str_to_box_future(Impl::help());
+    debug!("parsed command: {:?}", parsing_result);
+    match parsing_result {
+        Ok((builder, remaining)) => {
+            if builder.error {
+                CommandParseResult::Error
+            } else if builder.help {
+                CommandParseResult::Help
+            } else {
+                CommandParseResult::Normal(builder.flags, remaining)
             }
-            (&builder.flags, remaining)
         }
-        _ => return str_to_box_future("error: unable to parse the command"),
+        _ => CommandParseResult::Error,
+    }
+}
+
+fn execute_command<Impl: CommandImpl>(ctx: &ExecutionContext, args: &str) -> BoxFutureStr {
+    let (flags, remaining) = match parse_command_flags::<Impl>(args) {
+        CommandParseResult::Normal(flags, remaining) => (flags, remaining),
+        CommandParseResult::Help => return str_to_box_future(Impl::help()),
+        CommandParseResult::Error => {
+            return str_to_box_future("error: unable to parse the command");
+        }
     };
-    Box::new(Impl::run(&ctx, flags, remaining).then(|reply| {
+    Box::new(Impl::run(&ctx, &flags, remaining).then(|reply| {
         Ok(match reply {
             Ok(reply) => reply.into(),
             Err(err) => format!("error: {}", err).into(),
         })
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestCommand;
+
+    impl CommandImpl for TestCommand {
+        type Flags = Vec<&'static str>;
+
+        fn add_flag(flags: &mut Self::Flags, flag: &str) -> bool {
+            for f in &["--chars", "--12345", "--chars12345"] {
+                if flag == *f {
+                    flags.push(f);
+                    return true;
+                }
+            }
+            false
+        }
+
+        fn run(
+            _ctx: &ExecutionContext,
+            _flags: &Self::Flags,
+            _arg: &str,
+        ) -> Box<dyn Future<Item = String, Error = &'static str>> {
+            unreachable!()
+        }
+    }
+
+    fn parse(arg: &str) -> CommandParseResult<Vec<&'static str>> {
+        parse_command_flags::<TestCommand>(arg)
+    }
+
+    #[test]
+    fn test_flag_parsing() {
+        use super::CommandParseResult::*;
+        assert_eq!(
+            parse("--chars --12345 --chars12345 xxx"),
+            Normal(vec!["--chars", "--12345", "--chars12345"], "xxx"),
+        );
+        assert_eq!(
+            parse("--12345 --chars"),
+            Normal(vec!["--12345", "--chars"], ""),
+        );
+        assert_eq!(
+            parse("--12345 --12345 --chars --chars"),
+            Normal(vec!["--12345", "--12345", "--chars", "--chars"], ""),
+        );
+        assert_eq!(parse("--help"), Help);
+        assert_eq!(parse("--help xxxxx"), Help);
+        assert_eq!(parse("--12345 --help --chars xxx"), Help);
+        assert_eq!(parse("--unknown"), Error);
+        assert_eq!(parse("--help --unknown"), Error);
+        assert_eq!(parse("--12345 --unknown"), Error);
+        assert_eq!(parse("--unknown --12345"), Error);
+    }
 }
