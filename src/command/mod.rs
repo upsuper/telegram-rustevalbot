@@ -201,6 +201,19 @@ macro_rules! commands {
     }
 }
 
+commands! {
+    general: [
+        "/crate" => crate_::CrateCommand: "query crate information",
+        "/doc" => doc::DocCommand: "query document of Rust's standard library",
+        "/eval" => eval::EvalCommand: "evaluate a piece of Rust code",
+        "/rustc_version" => version::VersionCommand: "display rustc version being used",
+    ];
+    specific: [
+        "/version" => version::VersionCommand: "display rustc version being used",
+        "/about" => about::AboutCommand: "display information about this bot",
+    ];
+}
+
 struct FlagsBuilder<Impl: CommandImpl> {
     flags: Impl::Flags,
     help: bool,
@@ -274,17 +287,4 @@ fn execute_command<Impl: CommandImpl>(ctx: &ExecutionContext, args: &str) -> Box
             Err(err) => format!("error: {}", err).into(),
         })
     }))
-}
-
-commands! {
-    general: [
-        "/crate" => crate_::CrateCommand: "query crate information",
-        "/doc" => doc::DocCommand: "query document of Rust's standard library",
-        "/eval" => eval::EvalCommand: "evaluate a piece of Rust code",
-        "/rustc_version" => version::VersionCommand: "display rustc version being used",
-    ];
-    specific: [
-        "/version" => version::VersionCommand: "display rustc version being used",
-        "/about" => about::AboutCommand: "display information about this bot",
-    ];
 }
