@@ -8,7 +8,6 @@ use telegram_bot::{Message, MessageChat, MessageKind, ParseMode, Update, UpdateK
 use super::ADMIN_ID;
 use command::{Command, Executor};
 use record::RecordService;
-use utils;
 
 /// Processor for handling updates from Telegram.
 pub struct Processor {
@@ -53,7 +52,7 @@ impl Processor {
         match self.executor.execute(&cmd) {
             Some(future) => Box::new(future.then(move |reply| {
                 let reply = reply.unwrap();
-                let reply = reply.trim_matches(utils::is_separator);
+                let reply = reply.trim_matches(char::is_whitespace);
                 debug!("{}> sending: {:?}", id, reply);
                 let mut msg = chat.text(reply);
                 msg.parse_mode(ParseMode::Html);
@@ -86,7 +85,7 @@ impl Processor {
         match self.executor.execute(&cmd) {
             Some(future) => Box::new(future.then(move |reply| {
                 let reply = reply.unwrap();
-                let reply = reply.trim_matches(utils::is_separator);
+                let reply = reply.trim_matches(char::is_whitespace);
                 debug!("{}> updating: {:?}", id, reply);
                 let mut msg = EditMessageText::new(chat, reply_id, reply);
                 msg.parse_mode(ParseMode::Html);

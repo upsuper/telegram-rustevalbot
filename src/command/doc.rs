@@ -47,7 +47,7 @@ impl CommandImpl for DocCommand {
     ) -> Box<dyn Future<Item = String, Error = &'static str>> {
         let path = arg
             .split("::")
-            .map(|s| s.trim_matches(utils::is_separator))
+            .map(|s| s.trim_matches(char::is_whitespace))
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>();
         let QueryPath { root, path, name } = match split_path(&path) {
