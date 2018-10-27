@@ -1,6 +1,5 @@
-use futures::{Future, IntoFuture};
-
 use super::{CommandImpl, ExecutionContext};
+use futures::{Future, IntoFuture};
 
 pub struct AboutCommand;
 

@@ -1,3 +1,5 @@
+use super::{CommandImpl, ExecutionContext};
+use crate::utils::{self, WidthCountingWriter};
 use fst_subseq_ascii_caseless::SubseqAsciiCaseless;
 use futures::{Future, IntoFuture};
 use htmlescape::encode_minimal;
@@ -8,9 +10,6 @@ use std::fmt::{self, Write};
 use std::fs;
 use std::ops::Deref;
 use unicode_width::UnicodeWidthStr;
-
-use super::{CommandImpl, ExecutionContext};
-use utils::{self, WidthCountingWriter};
 
 lazy_static! {
     static ref SEEKER: RustDocSeeker = {
