@@ -202,7 +202,7 @@ struct Response {
     success: bool,
 }
 
-fn extract_code_headers<'a>(code: &'a str) -> (&'a str, &'a str) {
+fn extract_code_headers(code: &str) -> (&str, &str) {
     use combine::parser::{
         char::{alpha_num, space, spaces, string},
         choice::choice,
