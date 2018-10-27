@@ -1,13 +1,13 @@
+use super::ADMIN_ID;
+use crate::command::{Command, Executor};
+use crate::record::RecordService;
+use futures::{Future, IntoFuture};
+use log::{debug, warn};
+use matches::matches;
 use std::cell::RefCell;
 use std::rc::Rc;
-
-use futures::{Future, IntoFuture};
 use telegram_bot::{Api, CanSendMessage, DeleteMessage, EditMessageText};
 use telegram_bot::{Message, MessageChat, MessageKind, ParseMode, Update, UpdateKind};
-
-use super::ADMIN_ID;
-use command::{Command, Executor};
-use record::RecordService;
 
 /// Processor for handling updates from Telegram.
 pub struct Processor {

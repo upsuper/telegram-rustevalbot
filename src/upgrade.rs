@@ -1,7 +1,7 @@
+use log::{debug, info};
+use notify::{self, DebouncedEvent, RecursiveMode, Watcher};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-
-use notify::{self, DebouncedEvent, RecursiveMode, Watcher};
 
 const NOTIFY_FILE: &str = "upgrade";
 

@@ -1,9 +1,11 @@
+use super::{CommandImpl, ExecutionContext};
+use crate::utils;
 use futures::Future;
 use htmlescape::{encode_attribute, encode_minimal};
+use lazy_static::lazy_static;
+use log::{debug, warn};
 use regex::{Captures, Regex};
-
-use super::{CommandImpl, ExecutionContext};
-use utils;
+use serde::{Deserialize, Serialize};
 
 lazy_static! {
     static ref RE_ERROR: Regex = Regex::new(r"^error\[(E\d{4})\]:").unwrap();

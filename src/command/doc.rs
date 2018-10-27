@@ -1,7 +1,8 @@
 use fst_subseq_ascii_caseless::SubseqAsciiCaseless;
 use futures::{Future, IntoFuture};
 use htmlescape::encode_minimal;
-use lazy_static;
+use lazy_static::lazy_static;
+use matches::matches;
 use rustdoc_seeker::{DocItem, RustDoc, RustDocSeeker, TypeItem};
 use std::fmt::{self, Write};
 use std::fs;

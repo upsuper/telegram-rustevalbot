@@ -1,4 +1,5 @@
 use futures::{Future, IntoFuture};
+use log::debug;
 use reqwest::async::Client;
 use reqwest::header::{HeaderMap, USER_AGENT};
 use std::borrow::Cow;

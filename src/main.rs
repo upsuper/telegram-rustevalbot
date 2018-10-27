@@ -6,11 +6,8 @@ extern crate fst_subseq_ascii_caseless;
 extern crate futures;
 extern crate htmlescape;
 extern crate itertools;
-#[macro_use]
 extern crate lazy_static;
-#[macro_use]
 extern crate log;
-#[macro_use]
 extern crate matches;
 extern crate notify;
 extern crate percent_encoding;
@@ -18,8 +15,6 @@ extern crate regex;
 extern crate reqwest;
 extern crate rustdoc_seeker;
 extern crate serde;
-#[macro_use]
-extern crate serde_derive;
 extern crate serde_json;
 extern crate signal_hook;
 #[cfg(test)]
@@ -37,6 +32,8 @@ mod utils;
 
 use futures::future::Either;
 use futures::{Future, Stream};
+use lazy_static::lazy_static;
+use log::{debug, error, info, warn};
 use signal_hook::iterator::Signals;
 use signal_hook::SIGTERM;
 use std::cell::RefCell;
