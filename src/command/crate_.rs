@@ -7,6 +7,8 @@ use log::warn;
 use percent_encoding::{utf8_percent_encode, PATH_SEGMENT_ENCODE_SET};
 use reqwest::StatusCode;
 use serde::Deserialize;
+use std::borrow::Cow;
+use std::fmt::{self, Display, Formatter};
 
 pub struct CrateCommand;
 
@@ -19,44 +21,16 @@ impl CommandImpl for CrateCommand {
         arg: &str,
     ) -> Box<dyn Future<Item = String, Error = &'static str>> {
         let name = arg.trim().to_string();
-        let name_url = utf8_percent_encode(&name, PATH_SEGMENT_ENCODE_SET).collect::<String>();
-        let url = format!("https://crates.io/api/v1/crates/{}", name_url);
         let future = ctx
             .client
-            .get(&url)
-            .send()
+            .get(&format!(
+                "https://crates.io/api/v1/crates/{}",
+                encode_name(&name)
+            )).send()
             .and_then(|resp| resp.error_for_status())
             .and_then(|mut resp| resp.json())
-            .map(move |resp: Info| {
-                let info = resp.crate_;
-                let crate_url = format!("https://crates.io/crates/{}", name_url);
-                let doc_url = info
-                    .documentation
-                    .unwrap_or_else(|| format!("https://docs.rs/crate/{}", name_url));
-                let mut message = format!(
-                    concat!(
-                        "<b>{}</b> ({})",
-                        r#" - <a href="{}">info</a>"#,
-                        r#" - <a href="{}">doc</a>"#
-                    ),
-                    encode_minimal(&info.name),
-                    encode_minimal(&info.max_version),
-                    encode_attribute(&crate_url),
-                    encode_attribute(&doc_url),
-                );
-                if let Some(repo) = info.repository {
-                    message.push_str(&format!(
-                        r#" - <a href="{}">repo</a>"#,
-                        encode_attribute(&repo),
-                    ));
-                }
-                if let Some(description) = info.description {
-                    message.push_str(" - ");
-                    let description = description.split_whitespace().join(" ");
-                    message.push_str(&encode_minimal(&description));
-                }
-                message
-            }).or_else(move |err| match err.status() {
+            .map(move |resp: Info| format!("{}", resp.crate_))
+            .or_else(move |err| match err.status() {
                 Some(StatusCode::NOT_FOUND) => Ok(format!("<b>{}</b> - not found", name)),
                 _ => {
                     warn!("{:?}", err);
@@ -65,6 +39,10 @@ impl CommandImpl for CrateCommand {
             });
         Box::new(future)
     }
+}
+
+fn encode_name(name: &str) -> String {
+    utf8_percent_encode(name, PATH_SEGMENT_ENCODE_SET).collect()
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,4 +59,37 @@ struct Crate {
     max_version: String,
     documentation: Option<String>,
     repository: Option<String>,
+}
+
+impl Display for Crate {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let name_url = encode_name(&self.name);
+        let crate_url = format!("https://crates.io/crates/{}", name_url);
+        let doc_url = self
+            .documentation
+            .as_ref()
+            .map(|s| Cow::Borrowed(s.as_str()))
+            .unwrap_or_else(|| Cow::from(format!("https://docs.rs/crate/{}", name_url)));
+        write!(
+            f,
+            concat!(
+                "<b>{}</b> ({})",
+                r#" - <a href="{}">info</a>"#,
+                r#" - <a href="{}">doc</a>"#
+            ),
+            encode_minimal(&self.name),
+            encode_minimal(&self.max_version),
+            encode_attribute(&crate_url),
+            encode_attribute(&doc_url),
+        )?;
+        if let Some(repo) = &self.repository {
+            write!(f, r#" - <a href="{}">repo</a>"#, encode_attribute(&repo))?;
+        }
+        if let Some(description) = &self.description {
+            f.write_str(" - ")?;
+            let description = description.split_whitespace().join(" ");
+            f.write_str(&encode_minimal(&description))?;
+        }
+        Ok(())
+    }
 }
