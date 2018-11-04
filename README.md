@@ -46,6 +46,11 @@ when `--bare` is not used.
 Eval bot can display information about a crate on crates.io
 via `/crate <crate>` command, e.g. `/crate itertools`.
 
+This command supports two other modes via `--keyword` and `--query`.
+With one of the flag specified,
+it would use the argument as keyword or general query string,
+and list the first several items returned from crates.io.
+
 ### Document query
 
 Eval can can display document item from official document
