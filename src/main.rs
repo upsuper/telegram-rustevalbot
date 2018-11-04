@@ -22,6 +22,7 @@ extern crate string_cache;
 extern crate telegram_bot;
 extern crate tokio_core;
 extern crate unicode_width;
+extern crate url;
 
 mod command;
 mod processor;
