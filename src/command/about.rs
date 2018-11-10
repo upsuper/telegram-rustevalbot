@@ -15,7 +15,7 @@ impl CommandImpl for AboutCommand {
             Ok(format!(
                 "{} {}\n{}",
                 env!("CARGO_PKG_NAME"),
-                ::VERSION,
+                crate::VERSION,
                 env!("CARGO_PKG_HOMEPAGE")
             )).into_future(),
         )
