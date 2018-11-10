@@ -46,7 +46,14 @@ use std::time::Duration;
 use telegram_bot::{Api, CanSendMessage, Error, GetMe, GetUpdates, UserId};
 use tokio_core::reactor::Core;
 
-const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("VERSION"), ")",);
+const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("VERSION"),
+    " / ",
+    env!("BUILD_DATE"),
+    ")",
+);
 const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",

@@ -31,6 +31,7 @@ unicode-width = "0.1"
 url = "1.7.1"
 
 [build-dependencies]
+chrono = "0.4.6"
 git-version = "0.2"
 
 [dev-dependencies]
