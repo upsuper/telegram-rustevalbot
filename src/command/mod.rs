@@ -1,10 +1,10 @@
+use crate::utils::Void;
 use futures::{Future, IntoFuture};
 use log::debug;
-use reqwest::async::Client;
 use reqwest::header::{HeaderMap, USER_AGENT};
+use reqwest::r#async::Client;
 use std::borrow::Cow;
 use std::fmt::{self, Debug, Formatter};
-use utils::Void;
 
 /// Command executor.
 pub struct Executor {
