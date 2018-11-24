@@ -39,9 +39,7 @@ impl Processor {
     }
 
     fn handle_message(&self, id: UpdateId, message: &Message) -> BoxFuture {
-        self.records
-            .borrow_mut()
-            .clear_old_records(&message.date);
+        self.records.borrow_mut().clear_old_records(&message.date);
         let cmd = match Self::build_command(id, message) {
             Ok(cmd) => cmd,
             Err(()) => return Box::new(Ok(()).into_future()),
@@ -59,7 +57,9 @@ impl Processor {
                 let reply = reply.trim_matches(char::is_whitespace);
                 debug!("{}> sending: {:?}", id.0, reply);
                 bot.send_message(chat_id, reply)
-                    .map(move |reply_id| {
+                    .execute()
+                    .map(move |msg| {
+                        let reply_id = msg.message_id;
                         debug!("{}> sent as {}", id.0, reply_id.0);
                         records.borrow_mut().set_reply(msg_id, reply_id);
                     }).map_err(move |err| warn!("{}> error: {:?}", id.0, err))
@@ -89,6 +89,7 @@ impl Processor {
                 let reply = reply.trim_matches(char::is_whitespace);
                 debug!("{}> updating: {:?}", id.0, reply);
                 bot.edit_message(chat_id, reply_id, reply)
+                    .execute()
                     .map(move |_| debug!("{}> updated", id.0))
                     .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
             })),
@@ -97,6 +98,7 @@ impl Processor {
                 records.borrow_mut().remove_reply(msg_id);
                 Box::new(
                     bot.delete_message(chat_id, reply_id)
+                        .execute()
                         .map(move |_| debug!("{}> deleted", id.0))
                         .map_err(move |err| warn!("{}> error: {:?}", id.0, err)),
                 )

@@ -41,13 +41,14 @@ use log::{debug, error, info, warn};
 use reqwest::r#async::Client;
 use signal_hook::iterator::Signals;
 use signal_hook::SIGTERM;
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::env;
 use std::io::Write;
 use std::rc::Rc;
 use std::thread;
 use std::time::Duration;
-use telegram_types::bot::types::UserId;
+use telegram_types::bot::types::{ChatId, UserId};
 use tokio_core::reactor::Core;
 
 const VERSION: &str = concat!(
@@ -131,6 +132,20 @@ fn build_client() -> Client {
     Client::builder().default_headers(headers).build().unwrap()
 }
 
+fn send_message_to_admin<'a>(
+    core: &mut Core,
+    bot: &Bot,
+    text: impl Into<Cow<'a, str>>,
+) -> Result<(), Error> {
+    let admin_id = match *ADMIN_ID {
+        Some(id) => id,
+        None => return Ok(()),
+    };
+    let chat_id = ChatId(admin_id.0);
+    core.run(bot.send_message(chat_id, text).execute())
+        .map(|_| ())
+}
+
 fn main() -> Result<(), Error> {
     // We don't care if we fail to load .env file.
     let _ = dotenv::from_path(std::env::current_dir().unwrap().join(".env"));
@@ -150,7 +165,11 @@ fn main() -> Result<(), Error> {
     // Build the command executor
     let executor = command::Executor::new(client, bot.username);
     let processor = processor::Processor::new(bot.clone(), executor);
-    core.run(bot.send_message_to_admin(format!("Start version: {} @{}", VERSION, bot.username)))?;
+    send_message_to_admin(
+        &mut core,
+        &bot,
+        format!("Start version: {} @{}", VERSION, bot.username),
+    )?;
     let counter = Rc::new(RefCell::new(0));
     let retried = RefCell::new(0);
     let mut handle_update = |update| {
@@ -202,6 +221,6 @@ fn main() -> Result<(), Error> {
             debug!("{}> confirmed", shutdown_id.0);
         }))?;
     }
-    core.run(bot.send_message_to_admin("bye"))?;
+    send_message_to_admin(&mut core, &bot, "bye")?;
     Ok(())
 }
