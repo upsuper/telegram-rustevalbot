@@ -4,7 +4,7 @@ use serde_json;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io;
-use telegram_bot::MessageId;
+use telegram_types::bot::types::{MessageId, Time};
 
 const RECORD_LIST_FILE: &str = "record_list.json";
 
@@ -29,7 +29,7 @@ impl RecordService {
     }
 
     /// Push a new record with reply being empty.
-    pub fn push_record(&mut self, msg: MessageId, date: i64) {
+    pub fn push_record(&mut self, msg: MessageId, date: Time) {
         let reply = None;
         self.0.push_back(Record { msg, reply, date });
     }
@@ -62,12 +62,12 @@ impl RecordService {
     }
 
     /// Clear records order than 48hrs before the given date.
-    pub fn clear_old_records(&mut self, current_date: i64) {
+    pub fn clear_old_records(&mut self, current_date: &Time) {
         // We can clean up records up to 48hrs ago, because messages before that
         // cannot be edited anymore.
-        let date_to_clean = current_date - 48 * 3600;
+        let date_to_clean = current_date.0 - 48 * 3600;
         while let Some(record) = self.0.pop_front() {
-            if record.date > date_to_clean {
+            if record.date.0 > date_to_clean {
                 self.0.push_front(record);
                 break;
             }
@@ -91,6 +91,5 @@ impl Drop for RecordService {
 struct Record {
     msg: MessageId,
     reply: Option<MessageId>,
-    /// Same as Message::date, a UNIX epoch in seconds.
-    date: i64,
+    date: Time,
 }

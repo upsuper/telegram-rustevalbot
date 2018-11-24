@@ -19,11 +19,13 @@ extern crate serde_json;
 extern crate signal_hook;
 #[cfg(test)]
 extern crate string_cache;
-extern crate telegram_bot;
+extern crate telegram_types;
 extern crate tokio_core;
+extern crate tokio_timer;
 extern crate unicode_width;
 extern crate url;
 
+mod bot;
 mod command;
 mod processor;
 mod record;
@@ -31,10 +33,12 @@ mod shutdown;
 mod upgrade;
 mod utils;
 
+use crate::bot::{Bot, Error};
 use futures::future::Either;
 use futures::{Future, Stream};
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
+use reqwest::r#async::Client;
 use signal_hook::iterator::Signals;
 use signal_hook::SIGTERM;
 use std::cell::RefCell;
@@ -43,7 +47,7 @@ use std::io::Write;
 use std::rc::Rc;
 use std::thread;
 use std::time::Duration;
-use telegram_bot::{Api, CanSendMessage, Error, GetMe, GetUpdates, UserId};
+use telegram_types::bot::types::UserId;
 use tokio_core::reactor::Core;
 
 const VERSION: &str = concat!(
@@ -63,9 +67,14 @@ const USER_AGENT: &str = concat!(
 );
 
 lazy_static! {
+    static ref TOKEN: &'static str = Box::leak(
+        env::var("TELEGRAM_TOKEN")
+            .expect("TELEGRAM_TOKEN must be set!")
+            .into_boxed_str()
+    );
     static ref ADMIN_ID: Option<UserId> = env::var("BOT_ADMIN_ID")
         .ok()
-        .and_then(|s| str::parse(&s).map(UserId::new).ok());
+        .and_then(|s| str::parse(&s).map(UserId).ok());
     static ref SHUTDOWN: shutdown::Shutdown = Default::default();
 }
 
@@ -115,31 +124,33 @@ fn init_signal_handler() {
     });
 }
 
+fn build_client() -> Client {
+    use reqwest::header::{HeaderMap, USER_AGENT};
+    let mut headers = HeaderMap::new();
+    headers.insert(USER_AGENT, crate::USER_AGENT.parse().unwrap());
+    Client::builder().default_headers(headers).build().unwrap()
+}
+
 fn main() -> Result<(), Error> {
     // We don't care if we fail to load .env file.
-    let _ = dotenv::from_path(std::env::current_dir()?.join(".env"));
+    let _ = dotenv::from_path(std::env::current_dir().unwrap().join(".env"));
     init_logger();
     init_signal_handler();
     upgrade::init();
     command::init();
 
-    let mut core = Core::new()?;
-    let token = env::var("TELEGRAM_TOKEN").expect("TELEGRAM_TOKEN must be set!");
+    let mut core = Core::new().unwrap();
+    let handle = core.handle();
     info!("Running as `{}`", USER_AGENT);
 
-    let handle = core.handle();
-    // Configure Telegram API and get user information of ourselves
-    let api = Api::configure(token).build(&handle)?;
-    let self_user = core.run(api.send(GetMe))?;
-    let self_username = self_user.username.expect("No username?");
-    let self_username: &'static str = Box::leak(self_username.into_boxed_str());
-    info!("Authorized as @{}", self_username);
+    let client = build_client();
+    let bot = core.run(Bot::create(client.clone(), handle.clone(), &*TOKEN))?;
+    info!("Authorized as @{}", bot.username);
+
     // Build the command executor
-    let executor = command::Executor::new(self_username);
-    let processor = processor::Processor::new(api.clone(), executor);
-    if let Some(id) = &*ADMIN_ID {
-        api.spawn(id.text(format!("Start version: {} @{}", VERSION, self_username)));
-    }
+    let executor = command::Executor::new(client, &bot.username);
+    let processor = processor::Processor::new(bot.clone(), executor);
+    core.run(bot.send_message_to_admin(format!("Start version: {} @{}", VERSION, bot.username)))?;
     let counter = Rc::new(RefCell::new(0));
     let retried = RefCell::new(0);
     let mut handle_update = |update| {
@@ -156,8 +167,8 @@ fn main() -> Result<(), Error> {
         Ok(())
     };
     let shutdown_id = loop {
-        let future = api
-            .stream()
+        let future = bot
+            .get_updates()
             .for_each(&mut handle_update)
             .select2(SHUTDOWN.renew())
             .then(|result| match result {
@@ -186,13 +197,11 @@ fn main() -> Result<(), Error> {
     }
     // Start exiting
     if let Some(shutdown_id) = shutdown_id {
-        let mut get_updates = GetUpdates::new();
-        get_updates.offset(shutdown_id + 1);
-        debug!("{}> confirming", shutdown_id);
-        core.run(api.send(get_updates).map(move |_| {
-            debug!("{}> confirmed", shutdown_id);
+        debug!("{}> confirming", shutdown_id.0);
+        core.run(bot.confirm_update(shutdown_id).map(move |_| {
+            debug!("{}> confirmed", shutdown_id.0);
         }))?;
     }
-    core.run(api.send(ADMIN_ID.unwrap().text("bye")))?;
+    core.run(bot.send_message_to_admin("bye"))?;
     Ok(())
 }

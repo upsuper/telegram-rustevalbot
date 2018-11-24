@@ -1,10 +1,10 @@
 use crate::utils::Void;
 use futures::{Future, IntoFuture};
 use log::debug;
-use reqwest::header::{HeaderMap, USER_AGENT};
 use reqwest::r#async::Client;
 use std::borrow::Cow;
 use std::fmt::{self, Debug, Formatter};
+use telegram_types::bot::types::UpdateId;
 
 /// Command executor.
 pub struct Executor {
@@ -16,7 +16,7 @@ pub struct Executor {
 
 pub struct Command<'a> {
     /// Update id of the command
-    pub id: i64,
+    pub id: UpdateId,
     /// The command text
     pub command: &'a str,
     /// Whether this command is from an admin
@@ -41,10 +41,8 @@ type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void>>;
 
 impl Executor {
     /// Create new command executor.
-    pub fn new(username: &'static str) -> Self {
-        let mut headers = HeaderMap::new();
-        headers.insert(USER_AGENT, super::USER_AGENT.parse().unwrap());
-        let client = Client::builder().default_headers(headers).build().unwrap();
+    pub fn new(client: Client, username: &str) -> Self {
+        let username = Box::leak(username.to_string().into_boxed_str());
         Executor { client, username }
     }
 
@@ -81,7 +79,7 @@ impl Executor {
         };
         (
             recognize((item('/'), skip_many1(alpha_num()))),
-            optional((item('@'), string(self.username))),
+            optional((item('@'), string(&self.username))),
             optional((spaces(), recognize(skip_many(any())))),
             eof(),
         )
