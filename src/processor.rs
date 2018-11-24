@@ -93,16 +93,14 @@ impl Processor {
                     .map(move |_| debug!("{}> updated", id.0))
                     .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
             })),
-            None => {
+            None => Box::new({
                 debug!("{}> deleting", id.0);
                 records.borrow_mut().remove_reply(msg_id);
-                Box::new(
-                    bot.delete_message(chat_id, reply_id)
-                        .execute()
-                        .map(move |_| debug!("{}> deleted", id.0))
-                        .map_err(move |err| warn!("{}> error: {:?}", id.0, err)),
-                )
-            }
+                bot.delete_message(chat_id, reply_id)
+                    .execute()
+                    .map(move |_| debug!("{}> deleted", id.0))
+                    .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
+            }),
         }
     }
 
