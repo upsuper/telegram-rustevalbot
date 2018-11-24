@@ -4,7 +4,6 @@ use reqwest::r#async::Client;
 use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::VecDeque;
-use std::rc::Rc;
 use std::time::Duration;
 use telegram_types::bot::methods::{
     ApiError, ChatTarget, DeleteMessage, EditMessageText, GetMe, GetUpdates, Method, SendMessage,
@@ -20,7 +19,7 @@ pub struct Bot {
     client: Client,
     token: &'static str,
     /// Telegram username of the bot
-    pub username: Rc<str>,
+    pub username: &'static str,
 }
 
 impl Bot {
@@ -29,7 +28,7 @@ impl Bot {
         token: &'static str,
     ) -> impl Future<Item = Self, Error = Error> {
         request(&client, token, &GetMe).map(move |user| {
-            let username = Rc::from(user.username.expect("No username?"));
+            let username = Box::leak(user.username.expect("No username?").into_boxed_str());
             Bot {
                 client,
                 token,

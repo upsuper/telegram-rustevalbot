@@ -41,8 +41,7 @@ type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void>>;
 
 impl Executor {
     /// Create new command executor.
-    pub fn new(client: Client, username: &str) -> Self {
-        let username = Box::leak(username.to_string().into_boxed_str());
+    pub fn new(client: Client, username: &'static str) -> Self {
         Executor { client, username }
     }
 

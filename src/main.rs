@@ -148,7 +148,7 @@ fn main() -> Result<(), Error> {
     info!("Authorized as @{}", bot.username);
 
     // Build the command executor
-    let executor = command::Executor::new(client, &bot.username);
+    let executor = command::Executor::new(client, bot.username);
     let processor = processor::Processor::new(bot.clone(), executor);
     core.run(bot.send_message_to_admin(format!("Start version: {} @{}", VERSION, bot.username)))?;
     let counter = Rc::new(RefCell::new(0));
