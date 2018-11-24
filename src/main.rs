@@ -144,7 +144,7 @@ fn main() -> Result<(), Error> {
     info!("Running as `{}`", USER_AGENT);
 
     let client = build_client();
-    let bot = core.run(Bot::create(client.clone(), handle.clone(), &*TOKEN))?;
+    let bot = core.run(Bot::create(client.clone(), &*TOKEN))?;
     info!("Authorized as @{}", bot.username);
 
     // Build the command executor

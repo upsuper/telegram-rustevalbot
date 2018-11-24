@@ -11,7 +11,6 @@ use telegram_types::bot::methods::{
     TelegramResult,
 };
 use telegram_types::bot::types::{ChatId, MessageId, ParseMode, Update, UpdateId};
-use tokio_core::reactor::Handle;
 use tokio_timer::timeout::{self, Timeout};
 use tokio_timer::Error as TimerError;
 
@@ -19,7 +18,6 @@ use tokio_timer::Error as TimerError;
 #[derive(Clone)]
 pub struct Bot {
     client: Client,
-    handle: Handle,
     token: &'static str,
     /// Telegram username of the bot
     pub username: Rc<str>,
@@ -28,14 +26,12 @@ pub struct Bot {
 impl Bot {
     pub fn create(
         client: Client,
-        handle: Handle,
         token: &'static str,
     ) -> impl Future<Item = Self, Error = Error> {
         request(&client, token, &GetMe).map(move |user| {
             let username = Rc::from(user.username.expect("No username?"));
             Bot {
                 client,
-                handle,
                 token,
                 username,
             }
