@@ -26,14 +26,13 @@ extern crate unicode_width;
 extern crate url;
 
 mod bot;
-mod command;
-mod processor;
-mod record;
+mod eval;
 mod shutdown;
 mod upgrade;
 mod utils;
 
 use crate::bot::{Bot, Error};
+use crate::eval::EvalBot;
 use futures::future::Either;
 use futures::{Future, Stream};
 use lazy_static::lazy_static;
@@ -85,7 +84,7 @@ fn main() -> Result<(), Error> {
     init_logger();
     init_signal_handler();
     upgrade::init();
-    command::init();
+    EvalBot::init();
 
     let mut core = Core::new().unwrap();
     let handle = core.handle();
@@ -93,67 +92,61 @@ fn main() -> Result<(), Error> {
 
     let client = build_client();
     let bot = core.run(Bot::create(client.clone(), &*TOKEN))?;
-    info!("Authorized as @{}", bot.username);
+    let eval_bot = EvalBot::new(client.clone(), bot.clone());
 
-    // Build the command executor
-    let executor = command::Executor::new(client, bot.username);
-    let processor = processor::Processor::new(bot.clone(), executor);
     send_message_to_admin(
         &mut core,
         &bot,
         format!("Start version: {} @{}", VERSION, bot.username),
     )?;
-    let counter = Rc::new(RefCell::new(0));
-    let retried = RefCell::new(0);
-    let mut handle_update = |update| {
-        debug!("{:?}", update);
-        let future = processor.handle_update(update);
-        let counter_clone = counter.clone();
-        *counter.borrow_mut() += 1;
-        handle.spawn(future.then(move |result| {
-            *counter_clone.borrow_mut() -= 1;
-            result
-        }));
-        // Reset retried counter
-        *retried.borrow_mut() = 0;
-        Ok(())
-    };
-    let shutdown_id = loop {
-        let future = bot
-            .get_updates()
-            .for_each(&mut handle_update)
-            .select2(SHUTDOWN.renew())
-            .then(|result| match result {
-                Ok(Either::A(((), _))) => panic!("unexpected stop"),
-                Ok(Either::B((id, _))) => Ok(id),
-                Err(Either::A((e, _))) => Err(e),
-                Err(Either::B((e, _))) => panic!("shutdown canceled? {}", e),
-            });
-        match core.run(future) {
-            Ok(id) => break id,
-            Err(e) => {
-                let mut retried = retried.borrow_mut();
-                warn!("({}) telegram error: {:?}", retried, e);
-                if *retried >= 13 {
-                    error!("retried too many times!");
-                    panic!();
+    {
+        let counter = Rc::new(RefCell::new(0));
+        let retried = RefCell::new(0);
+        let mut handle_update = |update| {
+            debug!("{:?}", update);
+            let future = eval_bot.handle_update(update);
+            let counter_clone = counter.clone();
+            *counter.borrow_mut() += 1;
+            handle.spawn(future.then(move |result| {
+                *counter_clone.borrow_mut() -= 1;
+                result
+            }));
+            // Reset retried counter
+            *retried.borrow_mut() = 0;
+            Ok(())
+        };
+        loop {
+            let future = bot
+                .get_updates()
+                .for_each(&mut handle_update)
+                .select2(SHUTDOWN.renew())
+                .then(|result| match result {
+                    Ok(Either::A(((), _))) => panic!("unexpected stop"),
+                    Ok(Either::B(((), _))) => Ok(()),
+                    Err(Either::A((e, _))) => Err(e),
+                    Err(Either::B((e, _))) => panic!("shutdown canceled? {}", e),
+                });
+            match core.run(future) {
+                Ok(()) => break,
+                Err(e) => {
+                    let mut retried = retried.borrow_mut();
+                    warn!("({}) telegram error: {:?}", retried, e);
+                    if *retried >= 13 {
+                        error!("retried too many times!");
+                        panic!();
+                    }
+                    thread::sleep(Duration::new(1 << *retried, 0));
+                    *retried += 1;
                 }
-                thread::sleep(Duration::new(1 << *retried, 0));
-                *retried += 1;
             }
         }
-    };
-    // Waiting for any on-going futures.
-    while *counter.borrow() > 0 {
-        core.turn(None);
+        // Waiting for any on-going futures.
+        while *counter.borrow() > 0 {
+            core.turn(None);
+        }
     }
     // Start exiting
-    if let Some(shutdown_id) = shutdown_id {
-        debug!("{}> confirming", shutdown_id.0);
-        core.run(bot.confirm_update(shutdown_id).map(move |_| {
-            debug!("{}> confirmed", shutdown_id.0);
-        }))?;
-    }
+    core.run(eval_bot.shutdown())?;
     send_message_to_admin(&mut core, &bot, "bye")?;
     Ok(())
 }
@@ -195,7 +188,7 @@ fn init_signal_handler() {
             match signal {
                 SIGTERM => {
                     info!("SIGTERM");
-                    SHUTDOWN.shutdown(None);
+                    SHUTDOWN.shutdown();
                     break;
                 }
                 _ => unreachable!(),

@@ -1,7 +1,7 @@
-use super::ADMIN_ID;
+use super::command::{Command, Executor};
+use super::record::RecordService;
 use crate::bot::Bot;
-use crate::command::{Command, Executor};
-use crate::record::RecordService;
+use crate::ADMIN_ID;
 use futures::{Future, IntoFuture};
 use log::{debug, warn};
 use matches::matches;
@@ -26,6 +26,11 @@ impl Processor {
             executor,
             records: Rc::new(RefCell::new(RecordService::init())),
         }
+    }
+
+    /// Borrow the bot from the processor.
+    pub fn bot(&self) -> &Bot {
+        &self.bot
     }
 
     /// Handle the update.

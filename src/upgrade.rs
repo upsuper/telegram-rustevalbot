@@ -24,7 +24,7 @@ fn watch_notify_file(_watcher: &impl Watcher, rx: &Receiver<DebouncedEvent>) {
         debug!("notify: {:?}", event);
         if let DebouncedEvent::NoticeWrite(_) = event {
             info!("notify detected");
-            super::SHUTDOWN.shutdown(None);
+            super::SHUTDOWN.shutdown();
             break;
         }
     }

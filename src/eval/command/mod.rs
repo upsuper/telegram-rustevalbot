@@ -3,7 +3,9 @@ use futures::{Future, IntoFuture};
 use log::debug;
 use reqwest::r#async::Client;
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::fmt::{self, Debug, Formatter};
+use std::rc::Rc;
 use telegram_types::bot::types::UpdateId;
 
 /// Command executor.
@@ -12,6 +14,8 @@ pub struct Executor {
     client: Client,
     /// Telegram username of the bot
     username: &'static str,
+    /// Update ID of the shutdown message
+    shutdown_id: Rc<Cell<Option<UpdateId>>>,
 }
 
 pub struct Command<'a> {
@@ -41,8 +45,16 @@ type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void>>;
 
 impl Executor {
     /// Create new command executor.
-    pub fn new(client: Client, username: &'static str) -> Self {
-        Executor { client, username }
+    pub fn new(
+        client: Client,
+        username: &'static str,
+        shutdown_id: Rc<Cell<Option<UpdateId>>>,
+    ) -> Self {
+        Executor {
+            client,
+            username,
+            shutdown_id,
+        }
     }
 
     /// Execute a command.
@@ -60,7 +72,8 @@ impl Executor {
                 return Some(result);
             }
             if cmd.is_private && cmd.is_admin && info.name == "/shutdown" {
-                super::SHUTDOWN.shutdown(Some(cmd.id));
+                self.shutdown_id.set(Some(cmd.id));
+                crate::SHUTDOWN.shutdown();
                 return Some(str_to_box_future("start shutting down..."));
             }
         }
