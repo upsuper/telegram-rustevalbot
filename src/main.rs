@@ -79,73 +79,6 @@ lazy_static! {
     static ref SHUTDOWN: shutdown::Shutdown = Default::default();
 }
 
-fn init_logger() {
-    let env = env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info");
-    env_logger::Builder::from_env(env)
-        .format(|buf, record| {
-            let timestamp = buf.timestamp();
-            let level = record.level();
-            let level_style = buf.default_level_style(level);
-            let write_header = write!(buf, "{:>5} {}: ", level_style.value(level), timestamp);
-            let write_module_path = match record.module_path() {
-                None => Ok(()),
-                Some(mut module_path) => {
-                    const THIS_MODULE: &str = module_path!();
-                    if module_path.starts_with(THIS_MODULE) {
-                        let stripped = &module_path[THIS_MODULE.len()..];
-                        if stripped.is_empty() || stripped.starts_with("::") {
-                            module_path = stripped;
-                        }
-                    }
-                    if module_path.is_empty() {
-                        Ok(())
-                    } else {
-                        write!(buf, "{}: ", module_path)
-                    }
-                }
-            };
-            let write_args = writeln!(buf, "{}", record.args());
-            write_header.and(write_module_path).and(write_args)
-        }).init();
-}
-
-fn init_signal_handler() {
-    let signals = Signals::new(&[SIGTERM]).expect("failed to init signal handler");
-    thread::spawn(move || {
-        for signal in signals.forever() {
-            match signal {
-                SIGTERM => {
-                    info!("SIGTERM");
-                    SHUTDOWN.shutdown(None);
-                    break;
-                }
-                _ => unreachable!(),
-            }
-        }
-    });
-}
-
-fn build_client() -> Client {
-    use reqwest::header::{HeaderMap, USER_AGENT};
-    let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, crate::USER_AGENT.parse().unwrap());
-    Client::builder().default_headers(headers).build().unwrap()
-}
-
-fn send_message_to_admin<'a>(
-    core: &mut Core,
-    bot: &Bot,
-    text: impl Into<Cow<'a, str>>,
-) -> Result<(), Error> {
-    let admin_id = match *ADMIN_ID {
-        Some(id) => id,
-        None => return Ok(()),
-    };
-    let chat_id = ChatId(admin_id.0);
-    core.run(bot.send_message(chat_id, text).execute())
-        .map(|_| ())
-}
-
 fn main() -> Result<(), Error> {
     // We don't care if we fail to load .env file.
     let _ = dotenv::from_path(std::env::current_dir().unwrap().join(".env"));
@@ -223,4 +156,71 @@ fn main() -> Result<(), Error> {
     }
     send_message_to_admin(&mut core, &bot, "bye")?;
     Ok(())
+}
+
+fn init_logger() {
+    let env = env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info");
+    env_logger::Builder::from_env(env)
+        .format(|buf, record| {
+            let timestamp = buf.timestamp();
+            let level = record.level();
+            let level_style = buf.default_level_style(level);
+            let write_header = write!(buf, "{:>5} {}: ", level_style.value(level), timestamp);
+            let write_module_path = match record.module_path() {
+                None => Ok(()),
+                Some(mut module_path) => {
+                    const THIS_MODULE: &str = module_path!();
+                    if module_path.starts_with(THIS_MODULE) {
+                        let stripped = &module_path[THIS_MODULE.len()..];
+                        if stripped.is_empty() || stripped.starts_with("::") {
+                            module_path = stripped;
+                        }
+                    }
+                    if module_path.is_empty() {
+                        Ok(())
+                    } else {
+                        write!(buf, "{}: ", module_path)
+                    }
+                }
+            };
+            let write_args = writeln!(buf, "{}", record.args());
+            write_header.and(write_module_path).and(write_args)
+        }).init();
+}
+
+fn init_signal_handler() {
+    let signals = Signals::new(&[SIGTERM]).expect("failed to init signal handler");
+    thread::spawn(move || {
+        for signal in signals.forever() {
+            match signal {
+                SIGTERM => {
+                    info!("SIGTERM");
+                    SHUTDOWN.shutdown(None);
+                    break;
+                }
+                _ => unreachable!(),
+            }
+        }
+    });
+}
+
+fn build_client() -> Client {
+    use reqwest::header::{HeaderMap, USER_AGENT};
+    let mut headers = HeaderMap::new();
+    headers.insert(USER_AGENT, crate::USER_AGENT.parse().unwrap());
+    Client::builder().default_headers(headers).build().unwrap()
+}
+
+fn send_message_to_admin<'a>(
+    core: &mut Core,
+    bot: &Bot,
+    text: impl Into<Cow<'a, str>>,
+) -> Result<(), Error> {
+    let admin_id = match *ADMIN_ID {
+        Some(id) => id,
+        None => return Ok(()),
+    };
+    let chat_id = ChatId(admin_id.0);
+    core.run(bot.send_message(chat_id, text).execute())
+        .map(|_| ())
 }
