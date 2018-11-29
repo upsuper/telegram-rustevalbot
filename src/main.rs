@@ -41,7 +41,7 @@ use reqwest::r#async::Client;
 use signal_hook::iterator::Signals;
 use signal_hook::SIGTERM;
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::env;
 use std::io::Write;
 use std::rc::Rc;
@@ -100,19 +100,19 @@ fn main() -> Result<(), Error> {
         format!("Start version: {} @{}", VERSION, bot.username),
     )?;
     {
-        let counter = Rc::new(RefCell::new(0));
-        let retried = RefCell::new(0);
+        let counter = Rc::new(Cell::new(0));
+        let retried = Cell::new(0);
         let mut handle_update = |update| {
             debug!("{:?}", update);
             let future = eval_bot.handle_update(update);
-            let counter_clone = counter.clone();
-            *counter.borrow_mut() += 1;
+            counter.set(counter.get() + 1);
+            let counter = counter.clone();
             handle.spawn(future.then(move |result| {
-                *counter_clone.borrow_mut() -= 1;
+                counter.set(counter.get() - 1);
                 result
             }));
             // Reset retried counter
-            *retried.borrow_mut() = 0;
+            retried.set(0);
             Ok(())
         };
         loop {
@@ -129,19 +129,19 @@ fn main() -> Result<(), Error> {
             match core.run(future) {
                 Ok(()) => break,
                 Err(e) => {
-                    let mut retried = retried.borrow_mut();
-                    warn!("({}) telegram error: {:?}", retried, e);
-                    if *retried >= 13 {
+                    let cur_retried = retried.get();
+                    warn!("({}) telegram error: {:?}", cur_retried, e);
+                    if cur_retried >= 13 {
                         error!("retried too many times!");
                         panic!();
                     }
-                    thread::sleep(Duration::new(1 << *retried, 0));
-                    *retried += 1;
+                    thread::sleep(Duration::new(1 << cur_retried, 0));
+                    retried.set(cur_retried + 1);
                 }
             }
         }
         // Waiting for any on-going futures.
-        while *counter.borrow() > 0 {
+        while counter.get() > 0 {
             core.turn(None);
         }
     }
