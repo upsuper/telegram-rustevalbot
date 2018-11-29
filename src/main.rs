@@ -84,7 +84,7 @@ fn main() -> Result<(), Error> {
     init_logger();
     init_signal_handler();
     upgrade::init();
-    EvalBot::init();
+    eval::init();
 
     let mut core = Core::new().unwrap();
     let handle = core.handle();

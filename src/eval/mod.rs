@@ -11,16 +11,14 @@ mod command;
 mod processor;
 mod record;
 
+pub use self::command::init;
+
 pub struct EvalBot {
     processor: Processor,
     shutdown_id: Rc<Cell<Option<UpdateId>>>,
 }
 
 impl EvalBot {
-    pub fn init() {
-        command::init();
-    }
-
     pub fn new(client: Client, bot: Bot) -> Self {
         let shutdown_id = Rc::new(Cell::new(None));
         let executor = command::Executor::new(client, bot.username, shutdown_id.clone());

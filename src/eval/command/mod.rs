@@ -112,9 +112,6 @@ fn str_to_box_future(s: &'static str) -> BoxFutureStr {
 trait CommandImpl {
     type Flags: Debug + Default;
 
-    #[inline]
-    fn init() {}
-
     /// Returns the help message.
     fn help() -> &'static str {
         ""
@@ -164,6 +161,8 @@ mod doc;
 mod eval;
 mod version;
 
+pub use self::doc::init;
+
 macro_rules! commands {
     {
         general: [
@@ -173,11 +172,6 @@ macro_rules! commands {
             $($cmd_s:expr => $ty_s:ty: $desc_s:expr,)+
         ];
     } => {
-        pub(super) fn init() {
-            $(<$ty_g>::init();)+
-            $(<$ty_s>::init();)+
-        }
-
         fn display_help(is_private: bool) -> &'static str {
             if is_private {
                 concat!(

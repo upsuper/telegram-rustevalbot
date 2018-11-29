@@ -31,14 +31,14 @@ lazy_static! {
     };
 }
 
+pub fn init() {
+    lazy_static::initialize(&SEEKER);
+}
+
 pub struct DocCommand;
 
 impl CommandImpl for DocCommand {
     type Flags = ();
-
-    fn init() {
-        lazy_static::initialize(&SEEKER);
-    }
 
     fn run(
         ctx: &ExecutionContext,
