@@ -44,6 +44,6 @@ impl EvalBot {
                 debug!("{}> confirmed", shutdown_id.0);
             }));
         }
-        return Box::new(Ok(()).into_future());
+        Box::new(Ok(()).into_future())
     }
 }
