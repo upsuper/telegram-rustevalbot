@@ -33,6 +33,7 @@ mod utils;
 
 use crate::bot::{Bot, Error};
 use crate::eval::EvalBot;
+use crate::shutdown::Shutdown;
 use futures::future::Either;
 use futures::{Future, Stream};
 use lazy_static::lazy_static;
@@ -45,6 +46,7 @@ use std::cell::Cell;
 use std::env;
 use std::io::Write;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use telegram_types::bot::types::{ChatId, UserId};
@@ -75,15 +77,15 @@ lazy_static! {
     static ref ADMIN_ID: Option<UserId> = env::var("BOT_ADMIN_ID")
         .ok()
         .and_then(|s| str::parse(&s).map(UserId).ok());
-    static ref SHUTDOWN: shutdown::Shutdown = Default::default();
 }
 
 fn main() -> Result<(), Error> {
     // We don't care if we fail to load .env file.
     let _ = dotenv::from_path(std::env::current_dir().unwrap().join(".env"));
+    let shutdown = Shutdown::new();
     init_logger();
-    init_signal_handler();
-    upgrade::init();
+    init_signal_handler(shutdown.clone());
+    upgrade::init(shutdown.clone());
     eval::init();
 
     let mut core = Core::new().unwrap();
@@ -92,7 +94,7 @@ fn main() -> Result<(), Error> {
 
     let client = build_client();
     let bot = core.run(Bot::create(client.clone(), &*TOKEN))?;
-    let eval_bot = EvalBot::new(client.clone(), bot.clone());
+    let eval_bot = EvalBot::new(client.clone(), bot.clone(), shutdown.clone());
 
     send_message_to_admin(
         &mut core,
@@ -119,7 +121,7 @@ fn main() -> Result<(), Error> {
             let future = bot
                 .get_updates()
                 .for_each(&mut handle_update)
-                .select2(SHUTDOWN.renew())
+                .select2(shutdown.renew())
                 .then(|result| match result {
                     Ok(Either::A(((), _))) => panic!("unexpected stop"),
                     Ok(Either::B(((), _))) => Ok(()),
@@ -181,14 +183,14 @@ fn init_logger() {
         }).init();
 }
 
-fn init_signal_handler() {
+fn init_signal_handler(shutdown: Arc<Shutdown>) {
     let signals = Signals::new(&[SIGTERM]).expect("failed to init signal handler");
     thread::spawn(move || {
         for signal in signals.forever() {
             match signal {
                 SIGTERM => {
                     info!("SIGTERM");
-                    SHUTDOWN.shutdown();
+                    shutdown.shutdown();
                     break;
                 }
                 _ => unreachable!(),

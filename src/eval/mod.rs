@@ -1,10 +1,12 @@
 use self::processor::Processor;
 use crate::bot::{Bot, Error};
+use crate::shutdown::Shutdown;
 use futures::{Future, IntoFuture};
 use log::{debug, info};
 use reqwest::r#async::Client;
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::Arc;
 use telegram_types::bot::types::{Update, UpdateId};
 
 mod command;
@@ -19,9 +21,9 @@ pub struct EvalBot {
 }
 
 impl EvalBot {
-    pub fn new(client: Client, bot: Bot) -> Self {
+    pub fn new(client: Client, bot: Bot, shutdown: Arc<Shutdown>) -> Self {
         let shutdown_id = Rc::new(Cell::new(None));
-        let executor = command::Executor::new(client, bot.username, shutdown_id.clone());
+        let executor = command::Executor::new(client, bot.username, shutdown, shutdown_id.clone());
         let processor = Processor::new(bot, executor);
         info!("EvalBot authorized as @{}", processor.bot().username);
         EvalBot {
