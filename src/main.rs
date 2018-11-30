@@ -34,7 +34,6 @@ mod utils;
 use crate::bot::{Bot, Error};
 use crate::eval::EvalBot;
 use crate::shutdown::Shutdown;
-use futures::future::Either;
 use futures::{Future, Stream};
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
@@ -119,15 +118,8 @@ fn main() -> Result<(), Error> {
         };
         loop {
             let future = bot
-                .get_updates()
-                .for_each(&mut handle_update)
-                .select2(shutdown.renew())
-                .then(|result| match result {
-                    Ok(Either::A(((), _))) => panic!("unexpected stop"),
-                    Ok(Either::B(((), _))) => Ok(()),
-                    Err(Either::A((e, _))) => Err(e),
-                    Err(Either::B((e, _))) => panic!("shutdown canceled? {}", e),
-                });
+                .get_updates(shutdown.register())
+                .for_each(&mut handle_update);
             match core.run(future) {
                 Ok(()) => break,
                 Err(e) => {

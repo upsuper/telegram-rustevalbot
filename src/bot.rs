@@ -1,4 +1,5 @@
 use futures::future::Either;
+use futures::sync::oneshot::Receiver;
 use futures::{Async, Future, IntoFuture, Poll, Stream};
 use reqwest;
 use reqwest::r#async::{Client, Request};
@@ -37,12 +38,16 @@ impl Bot {
         })
     }
 
-    pub fn get_updates<'s>(&'s self) -> impl Stream<Item = Update, Error = Error> + 's {
+    pub fn get_updates<'s>(
+        &'s self,
+        stop_signal: Receiver<()>,
+    ) -> impl Stream<Item = Update, Error = Error> + 's {
         UpdateStream {
             bot: self,
             update_id: None,
             buffer: VecDeque::new(),
             current_request: None,
+            stop_signal,
         }
     }
 
@@ -152,6 +157,7 @@ struct UpdateStream<'a> {
     update_id: Option<UpdateId>,
     buffer: VecDeque<Update>,
     current_request: Option<PendingFuture>,
+    stop_signal: Receiver<()>,
 }
 
 type PendingFuture = Box<dyn Future<Item = Vec<Update>, Error = timeout::Error<Error>>>;
@@ -163,6 +169,11 @@ impl<'a> Stream for UpdateStream<'a> {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        match self.stop_signal.poll() {
+            Ok(Async::Ready(())) => return Ok(Async::Ready(None)),
+            Ok(Async::NotReady) => {}
+            Err(err) => unreachable!("Shutdown singal dies: {:?}", err),
+        }
         loop {
             if let Some(update) = self.buffer.pop_front() {
                 break Ok(Async::Ready(Some(update)));
