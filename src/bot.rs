@@ -161,7 +161,7 @@ struct UpdateStream<'a> {
     stop_signal: Receiver<()>,
 }
 
-type PendingFuture = Box<dyn Future<Item = Vec<Update>, Error = timeout::Error<Error>>>;
+type PendingFuture = Box<dyn Future<Item = Vec<Update>, Error = timeout::Error<Error>> + Send>;
 
 const TELEGRAM_TIMEOUT_SECS: u16 = 5;
 

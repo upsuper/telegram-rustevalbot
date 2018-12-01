@@ -56,7 +56,7 @@ impl EvalBot {
         }
     }
 
-    pub fn shutdown(self) -> Box<dyn Future<Item = (), Error = Error>> {
+    pub fn shutdown(self) -> Box<dyn Future<Item = (), Error = Error> + Send> {
         if let Some(shutdown_id) = self.shutdown_id.lock().take() {
             debug!("{}> confirming", shutdown_id.0);
             let bot = self.bot();
