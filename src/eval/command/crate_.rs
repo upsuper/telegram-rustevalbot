@@ -46,7 +46,8 @@ impl CommandImpl for CrateCommand {
                     .get(&format!(
                         "https://crates.io/api/v1/crates/{}",
                         encode_for_url(&query)
-                    )).send()
+                    ))
+                    .send()
                     .and_then(|resp| resp.error_for_status())
                     .and_then(|mut resp| resp.json())
                     .map(move |resp: Info| format!("{}", resp.crate_))
@@ -95,10 +96,12 @@ impl CommandImpl for CrateCommand {
                         result,
                         r#"<a href="{}">More...</a>"#,
                         encode_attribute(&url)
-                    ).unwrap();
+                    )
+                    .unwrap();
                 }
                 result
-            }).or_else(|err| {
+            })
+            .or_else(|err| {
                 warn!("{:?}", err);
                 Err(utils::map_reqwest_error(&err))
             });

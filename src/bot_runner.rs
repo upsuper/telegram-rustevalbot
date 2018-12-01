@@ -1,7 +1,7 @@
 use crate::bot::{Bot, Error};
 use crate::shutdown::Shutdown;
-use futures::{Async, Future, Poll, Stream};
 use futures::sync::oneshot::{channel, Receiver};
+use futures::{Async, Future, Poll, Stream};
 use log::{error, warn};
 use reqwest::r#async::Client;
 use std::env;
@@ -19,7 +19,10 @@ pub fn run<Impl, Creator, Handler, HandleResult, BotShutdown, BotShutdownResult,
     create_impl: Creator,
     handle_update: Handler,
     bot_shutdown: BotShutdown,
-) -> (impl Future<Item = (), Error = ()> + Send, Receiver<Result<Bot, ()>>)
+) -> (
+    impl Future<Item = (), Error = ()> + Send,
+    Receiver<Result<Bot, ()>>,
+)
 where
     Impl: Send + Sync + 'static,
     Creator: (FnOnce(Bot) -> Impl) + Send + 'static,
@@ -32,13 +35,12 @@ where
     let token = Box::leak(
         env::var(token_env)
             .unwrap_or_else(|e| panic!("{} must be set for {}: {:?}", token_env, name, e))
-            .into_boxed_str()
+            .into_boxed_str(),
     );
     let (sender, receiver) = channel();
     let future = Bot::create(client.clone(), token)
         .then(move |bot_result| {
-            let result = bot_result
-                .map_err(|e| error!("failed to init bot for {}: {:?}", name, e));
+            let result = bot_result.map_err(|e| error!("failed to init bot for {}: {:?}", name, e));
             sender.send(result.clone()).unwrap();
             result
         })
@@ -53,9 +55,11 @@ where
                 delay: None,
             }
         })
-        .and_then(move |bot_impl| bot_shutdown(bot_impl).map_err(move |e| {
-            error!("failed to shutdown {}: {:?}", name, e);
-        }));
+        .and_then(move |bot_impl| {
+            bot_shutdown(bot_impl).map_err(move |e| {
+                error!("failed to shutdown {}: {:?}", name, e);
+            })
+        });
     (future, receiver)
 }
 

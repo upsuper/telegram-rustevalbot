@@ -91,7 +91,8 @@ impl EvalBot {
                         let reply_id = msg.message_id;
                         debug!("{}> sent as {}", id.0, reply_id.0);
                         records.lock().set_reply(msg_id, reply_id);
-                    }).map_err(move |err| warn!("{}> error: {:?}", id.0, err))
+                    })
+                    .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
             })),
             None => Box::new(Err(()).into_future()),
         }

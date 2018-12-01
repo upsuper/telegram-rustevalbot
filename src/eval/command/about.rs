@@ -13,7 +13,8 @@ impl CommandImpl for AboutCommand {
                 env!("CARGO_PKG_NAME"),
                 crate::VERSION,
                 env!("CARGO_PKG_HOMEPAGE")
-            )).into_future(),
+            ))
+            .into_future(),
         )
     }
 }

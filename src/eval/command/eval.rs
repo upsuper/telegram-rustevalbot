@@ -142,7 +142,8 @@ impl CommandImpl for EvalCommand {
                 } else {
                     "(nothing??)".to_string()
                 }
-            }).map_err(|e| utils::map_reqwest_error(&e));
+            })
+            .map_err(|e| utils::map_reqwest_error(&e));
         Box::new(future)
     }
 }
@@ -243,7 +244,8 @@ fn extract_code_headers(code: &str) -> (&str, &str) {
             )),
             spaces(),
         )),
-    )).parse(code)
+    ))
+    .parse(code)
     .unwrap_or_else(|_| {
         debug_assert!(false, "extract_code_headers should always succeed");
         warn!("failed to split code: {}", code);

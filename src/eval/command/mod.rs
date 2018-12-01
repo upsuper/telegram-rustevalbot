@@ -104,7 +104,8 @@ impl Executor {
                 name,
                 args: args.map(|(_, s)| s).unwrap_or(""),
                 at_self: at_self.is_some(),
-            }).parse(s)
+            })
+            .parse(s)
             .map(|(ci, _)| ci)
             .ok()
     }

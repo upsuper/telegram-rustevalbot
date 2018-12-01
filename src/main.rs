@@ -159,7 +159,8 @@ fn init_logger() {
             };
             let write_args = writeln!(buf, "{}", record.args());
             write_header.and(write_module_path).and(write_args)
-        }).init();
+        })
+        .init();
 }
 
 fn init_signal_handler(shutdown: Arc<Shutdown>) {
