@@ -17,7 +17,7 @@ use tokio_timer::timeout::{self, Timeout};
 use tokio_timer::Error as TimerError;
 
 /// Telegram bot
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Bot {
     client: Client,
     token: &'static str,
@@ -36,6 +36,10 @@ impl Bot {
             let username = Box::leak(user.username.expect("No username?").into_boxed_str());
             Bot { username, ..bot }
         })
+    }
+
+    pub fn with_client(self, client: Client) -> Self {
+        Bot { client, ..self }
     }
 
     pub fn get_updates(

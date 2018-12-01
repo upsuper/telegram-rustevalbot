@@ -4,7 +4,6 @@ extern crate env_logger;
 extern crate fst;
 extern crate fst_subseq_ascii_caseless;
 extern crate futures;
-extern crate futures_retry;
 extern crate htmlescape;
 extern crate itertools;
 extern crate lazy_static;
@@ -22,37 +21,33 @@ extern crate signal_hook;
 #[cfg(test)]
 extern crate string_cache;
 extern crate telegram_types;
-extern crate tokio_core;
+extern crate tokio;
 extern crate tokio_timer;
 extern crate unicode_width;
 extern crate url;
 
 mod bot;
+mod bot_runner;
 mod eval;
 mod shutdown;
 mod upgrade;
 mod utils;
 
-use crate::bot::{Bot, Error};
+use crate::bot::Bot;
 use crate::eval::EvalBot;
 use crate::shutdown::Shutdown;
-use futures::{Future, Stream};
-use futures_retry::{RetryPolicy, StreamRetryExt};
+use futures::Future;
 use lazy_static::lazy_static;
-use log::{debug, error, info, warn};
+use log::{error, info};
 use reqwest::r#async::Client;
 use signal_hook::iterator::Signals;
 use signal_hook::SIGTERM;
-use std::borrow::Cow;
-use std::cell::Cell;
 use std::env;
 use std::io::Write;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
 use telegram_types::bot::types::{ChatId, UserId};
-use tokio_core::reactor::Core;
+use tokio::runtime::Runtime;
 
 const VERSION: &str = concat!(
     env!("CARGO_PKG_VERSION"),
@@ -71,18 +66,13 @@ const USER_AGENT: &str = concat!(
 );
 
 lazy_static! {
-    static ref TOKEN: &'static str = Box::leak(
-        env::var("TELEGRAM_TOKEN")
-            .expect("TELEGRAM_TOKEN must be set!")
-            .into_boxed_str()
-    );
     static ref ADMIN_ID: UserId = env::var("BOT_ADMIN_ID")
         .ok()
         .and_then(|s| str::parse(&s).map(UserId).ok())
         .expect("BOT_ADMIN_ID must be a valid user id");
 }
 
-fn main() -> Result<(), Error> {
+fn main() {
     // We don't care if we fail to load .env file.
     let _ = dotenv::from_path(std::env::current_dir().unwrap().join(".env"));
     let shutdown = Shutdown::new();
@@ -91,58 +81,55 @@ fn main() -> Result<(), Error> {
     upgrade::init(shutdown.clone());
     eval::init();
 
-    let mut core = Core::new().unwrap();
-    let handle = core.handle();
     info!("Running as `{}`", USER_AGENT);
 
+    let mut runtime = Runtime::new().unwrap();
     let client = build_client();
-    let bot = core.run(Bot::create(client.clone(), &*TOKEN))?;
-    let eval_bot = EvalBot::new(client.clone(), bot.clone(), shutdown.clone());
 
-    send_message_to_admin(
-        &mut core,
-        &bot,
-        format!("Start version: {} @{}", VERSION, bot.username),
-    )?;
-    {
-        let counter = Rc::new(Cell::new(0));
-        let retried = Cell::new(0);
-        let mut handle_update = |update| {
-            debug!("{:?}", update);
-            let future = eval_bot.handle_update(update);
-            counter.set(counter.get() + 1);
-            let counter = counter.clone();
-            handle.spawn(future.then(move |result| {
-                counter.set(counter.get() - 1);
-                result
-            }));
-            // Reset retried counter
-            retried.set(0);
-            Ok(())
-        };
-        let future = bot
-            .get_updates(shutdown.register())
-            .retry(|e| {
-                let cur_retried = retried.get();
-                warn!("({}) telegram error: {:?}", cur_retried, e);
-                if cur_retried >= 13 {
-                    error!("retried too many times!");
-                    RetryPolicy::ForwardError(e)
-                } else {
-                    retried.set(cur_retried + 1);
-                    RetryPolicy::WaitRetry(Duration::from_secs(1 << cur_retried))
-                }
-            }).for_each(&mut handle_update);
-        core.run(future)?;
-        // Waiting for any on-going futures.
-        while counter.get() > 0 {
-            core.turn(None);
-        }
+    // Kick off eval bot.
+    let client_clone = client.clone();
+    let shutdown_clone = shutdown.clone();
+    let (eval_future, eval_receiver) = bot_runner::run(
+        "eval",
+        "TELEGRAM_TOKEN",
+        &client,
+        shutdown.clone(),
+        move |bot| EvalBot::new(client_clone, bot, shutdown_clone),
+        |eval_bot, update| eval_bot.handle_update(update),
+        |eval_bot| eval_bot.shutdown(),
+    );
+    runtime.spawn(eval_future);
+
+    // Drop the client otherwise shutdown_on_idle below may be blocked
+    // by its connection pool.
+    drop(client);
+
+    fn send_message_to_admin(bot: &Bot, msg: String) -> impl Future<Item = (), Error = ()> {
+        let chat_id = ChatId(ADMIN_ID.0);
+        bot.send_message(chat_id, msg)
+            .execute()
+            .map(|_| ())
+            .map_err(|e| error!("failed to send message to admin: {:?}", e))
     }
-    // Start exiting
-    core.run(eval_bot.shutdown())?;
-    send_message_to_admin(&mut core, &bot, "bye")?;
-    Ok(())
+
+    let bot = eval_receiver.wait().unwrap().unwrap();
+    let username = bot.username;
+    let start_msg = format!("Start version: {} @{}", VERSION, username);
+    // This message will be sent with the original client we created above,
+    // so use runtime to run it.
+    runtime.spawn(send_message_to_admin(&bot, start_msg));
+
+    // Replace the client inside the bot with a new one so that it doesn't
+    // block the shutdown.
+    let bot = bot.with_client(build_client());
+    // Wait for the runtime to shutdown.
+    runtime.shutdown_on_idle().wait().unwrap();
+
+    // Send the final message with the new client.
+    let bye = send_message_to_admin(&bot, "bye".to_string());
+    // Drop the bot (and its client) so that nothing blocks tokio::run to finish.
+    drop(bot);
+    tokio::run(bye);
 }
 
 fn init_logger() {
@@ -196,14 +183,4 @@ fn build_client() -> Client {
     let mut headers = HeaderMap::new();
     headers.insert(USER_AGENT, crate::USER_AGENT.parse().unwrap());
     Client::builder().default_headers(headers).build().unwrap()
-}
-
-fn send_message_to_admin<'a>(
-    core: &mut Core,
-    bot: &Bot,
-    text: impl Into<Cow<'a, str>>,
-) -> Result<(), Error> {
-    let chat_id = ChatId(ADMIN_ID.0);
-    core.run(bot.send_message(chat_id, text).execute())
-        .map(|_| ())
 }
