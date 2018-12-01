@@ -21,11 +21,7 @@ fn init_watcher(tx: Sender<DebouncedEvent>) -> notify::Result<impl Watcher> {
     Ok(watcher)
 }
 
-fn watch_notify_file(
-    _watcher: &impl Watcher,
-    rx: &Receiver<DebouncedEvent>,
-    shutdown: &Shutdown,
-) {
+fn watch_notify_file(_watcher: &impl Watcher, rx: &Receiver<DebouncedEvent>, shutdown: &Shutdown) {
     for event in rx.iter() {
         debug!("notify: {:?}", event);
         if let DebouncedEvent::NoticeWrite(_) = event {

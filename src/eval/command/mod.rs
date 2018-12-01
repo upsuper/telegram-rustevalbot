@@ -132,11 +132,7 @@ trait CommandImpl {
 
     // XXX Trait functions cannot return `impl Trait`.
     // Hopefully in the future we can use `async fn` here.
-    fn run(
-        ctx: &ExecutionContext,
-        flags: &Self::Flags,
-        arg: &str,
-    ) -> BoxCommandFuture;
+    fn run(ctx: &ExecutionContext, flags: &Self::Flags, arg: &str) -> BoxCommandFuture;
 }
 
 macro_rules! impl_command_methods {
@@ -340,11 +336,7 @@ mod tests {
             false
         }
 
-        fn run(
-            _ctx: &ExecutionContext,
-            _flags: &Self::Flags,
-            _arg: &str,
-        ) -> BoxCommandFuture {
+        fn run(_ctx: &ExecutionContext, _flags: &Self::Flags, _arg: &str) -> BoxCommandFuture {
             unreachable!()
         }
     }
