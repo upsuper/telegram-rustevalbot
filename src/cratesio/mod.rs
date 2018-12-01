@@ -3,7 +3,7 @@ use futures::future::Either;
 use futures::{Future, IntoFuture};
 use htmlescape::encode_minimal;
 use itertools::Itertools;
-use log::{info, warn};
+use log::{debug, info, warn};
 use percent_encoding::{utf8_percent_encode, PATH_SEGMENT_ENCODE_SET};
 use reqwest::r#async::Client;
 use reqwest::IntoUrl;
@@ -53,6 +53,7 @@ impl CratesioBot {
         let future = result
             .map_err(|e| warn!("failed to get results: {:?}", e))
             .and_then(move |r| {
+                debug!("replying: {:?}", r);
                 bot.answer_inline_query(query.id, &r)
                     .execute()
                     .map(|_| ())
