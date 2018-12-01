@@ -1,5 +1,5 @@
 use super::eval::Channel;
-use super::{CommandImpl, ExecutionContext};
+use super::{BoxCommandFuture, CommandImpl, ExecutionContext};
 use crate::utils;
 use futures::Future;
 use serde::Deserialize;
@@ -21,11 +21,7 @@ impl CommandImpl for VersionCommand {
         }
     }
 
-    fn run(
-        ctx: &ExecutionContext,
-        channel: &Option<Channel>,
-        _arg: &str,
-    ) -> Box<dyn Future<Item = String, Error = &'static str>> {
+    fn run(ctx: &ExecutionContext, channel: &Option<Channel>, _arg: &str) -> BoxCommandFuture {
         let url = format!(
             "https://play.rust-lang.org/meta/version/{}",
             channel.unwrap_or(Channel::Stable).as_str(),

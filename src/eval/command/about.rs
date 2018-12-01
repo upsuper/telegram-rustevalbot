@@ -1,16 +1,12 @@
-use super::{CommandImpl, ExecutionContext};
-use futures::{Future, IntoFuture};
+use super::{BoxCommandFuture, CommandImpl, ExecutionContext};
+use futures::IntoFuture;
 
 pub struct AboutCommand;
 
 impl CommandImpl for AboutCommand {
     type Flags = ();
 
-    fn run(
-        _ctx: &ExecutionContext,
-        _flags: &(),
-        _arg: &str,
-    ) -> Box<dyn Future<Item = String, Error = &'static str>> {
+    fn run(_ctx: &ExecutionContext, _flags: &(), _arg: &str) -> BoxCommandFuture {
         Box::new(
             Ok(format!(
                 "{} {}\n{}",

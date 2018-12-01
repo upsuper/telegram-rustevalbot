@@ -1,4 +1,4 @@
-use super::{CommandImpl, ExecutionContext};
+use super::{BoxCommandFuture, CommandImpl, ExecutionContext};
 use crate::utils;
 use futures::Future;
 use htmlescape::{encode_attribute, encode_minimal};
@@ -36,11 +36,7 @@ impl CommandImpl for CrateCommand {
         }
     }
 
-    fn run(
-        ctx: &ExecutionContext,
-        flags: &Flags,
-        arg: &str,
-    ) -> Box<dyn Future<Item = String, Error = &'static str>> {
+    fn run(ctx: &ExecutionContext, flags: &Flags, arg: &str) -> BoxCommandFuture {
         let query = arg.trim().to_string();
         let mode = match flags.mode {
             Some(mode) => mode,

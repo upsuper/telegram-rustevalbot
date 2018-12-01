@@ -24,7 +24,7 @@ pub struct EvalBot {
     shutdown_id: Arc<Mutex<Option<UpdateId>>>,
 }
 
-type BoxFuture = Box<dyn Future<Item = (), Error = ()>>;
+type BoxFuture = Box<dyn Future<Item = (), Error = ()> + Send>;
 
 impl EvalBot {
     /// Create new eval bot instance.

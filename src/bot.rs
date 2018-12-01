@@ -109,9 +109,10 @@ pub struct BotRequest<'a, T> {
 
 impl<'a, T> BotRequest<'a, T>
 where
+    T: Send,
     for<'de> T: Deserialize<'de>,
 {
-    pub fn execute(self) -> impl Future<Item = T, Error = Error> {
+    pub fn execute(self) -> impl Future<Item = T, Error = Error> + Send {
         let req = match self.request {
             Ok(req) => req,
             Err(err) => return Either::B(Err(err.into()).into_future()),

@@ -44,7 +44,7 @@ struct ExecutionContext<'a> {
     is_specific: bool,
 }
 
-type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void>>;
+type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void> + Send>;
 
 impl Executor {
     /// Create new command executor.
@@ -114,6 +114,8 @@ fn str_to_box_future(s: &'static str) -> BoxFutureStr {
     Box::new(Ok(s.into()).into_future())
 }
 
+type BoxCommandFuture = Box<dyn Future<Item = String, Error = &'static str> + Send>;
+
 trait CommandImpl {
     type Flags: Debug + Default;
 
@@ -134,7 +136,7 @@ trait CommandImpl {
         ctx: &ExecutionContext,
         flags: &Self::Flags,
         arg: &str,
-    ) -> Box<dyn Future<Item = String, Error = &'static str>>;
+    ) -> BoxCommandFuture;
 }
 
 macro_rules! impl_command_methods {
@@ -342,7 +344,7 @@ mod tests {
             _ctx: &ExecutionContext,
             _flags: &Self::Flags,
             _arg: &str,
-        ) -> Box<dyn Future<Item = String, Error = &'static str>> {
+        ) -> BoxCommandFuture {
             unreachable!()
         }
     }

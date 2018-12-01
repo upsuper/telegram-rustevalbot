@@ -1,7 +1,7 @@
-use super::{CommandImpl, ExecutionContext};
+use super::{BoxCommandFuture, CommandImpl, ExecutionContext};
 use crate::utils::{self, WidthCountingWriter};
 use fst_subseq_ascii_caseless::SubseqAsciiCaseless;
-use futures::{Future, IntoFuture};
+use futures::IntoFuture;
 use htmlescape::encode_minimal;
 use lazy_static::lazy_static;
 use matches::matches;
@@ -40,11 +40,7 @@ pub struct DocCommand;
 impl CommandImpl for DocCommand {
     type Flags = ();
 
-    fn run(
-        ctx: &ExecutionContext,
-        _flags: &(),
-        arg: &str,
-    ) -> Box<dyn Future<Item = String, Error = &'static str>> {
+    fn run(ctx: &ExecutionContext, _flags: &(), arg: &str) -> BoxCommandFuture {
         let path = arg
             .split("::")
             .map(|s| s.trim_matches(char::is_whitespace))
