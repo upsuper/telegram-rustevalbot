@@ -11,6 +11,7 @@ extern crate lazy_static;
 extern crate log;
 extern crate matches;
 extern crate notify;
+extern crate parking_lot;
 extern crate percent_encoding;
 extern crate regex;
 extern crate reqwest;

@@ -1,5 +1,6 @@
 use futures::sync::oneshot::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 pub struct Shutdown {
     /// Queue of senders for shutdown notification. None if the shutdown
@@ -16,7 +17,7 @@ impl Shutdown {
 
     pub fn register(&self) -> Receiver<()> {
         let (sender, receiver) = channel();
-        match &mut *self.queue.lock().unwrap() {
+        match &mut *self.queue.lock() {
             Some(queue) => queue.push(sender),
             None => sender.send(()).unwrap(),
         }
@@ -24,7 +25,7 @@ impl Shutdown {
     }
 
     pub fn shutdown(&self) {
-        if let Some(queue) = self.queue.lock().unwrap().take() {
+        if let Some(queue) = self.queue.lock().take() {
             for sender in queue {
                 // We don't care if the receiver has gone.
                 let _ = sender.send(());
