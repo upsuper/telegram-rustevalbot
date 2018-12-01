@@ -116,6 +116,7 @@ impl Crate {
             encode_minimal(&self.max_version)
         );
         if let Some(description) = &description {
+            let description = encode_minimal(description);
             message.push_str(" - ");
             message.push_str(&description);
         }
