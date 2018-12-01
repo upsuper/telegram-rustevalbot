@@ -4,6 +4,7 @@ extern crate env_logger;
 extern crate fst;
 extern crate fst_subseq_ascii_caseless;
 extern crate futures;
+extern crate futures_retry;
 extern crate htmlescape;
 extern crate itertools;
 extern crate lazy_static;
@@ -35,6 +36,7 @@ use crate::bot::{Bot, Error};
 use crate::eval::EvalBot;
 use crate::shutdown::Shutdown;
 use futures::{Future, Stream};
+use futures_retry::{RetryPolicy, StreamRetryExt};
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use reqwest::r#async::Client;
@@ -116,24 +118,20 @@ fn main() -> Result<(), Error> {
             retried.set(0);
             Ok(())
         };
-        loop {
-            let future = bot
-                .get_updates(shutdown.register())
-                .for_each(&mut handle_update);
-            match core.run(future) {
-                Ok(()) => break,
-                Err(e) => {
-                    let cur_retried = retried.get();
-                    warn!("({}) telegram error: {:?}", cur_retried, e);
-                    if cur_retried >= 13 {
-                        error!("retried too many times!");
-                        panic!();
-                    }
-                    thread::sleep(Duration::new(1 << cur_retried, 0));
+        let future = bot
+            .get_updates(shutdown.register())
+            .retry(|e| {
+                let cur_retried = retried.get();
+                warn!("({}) telegram error: {:?}", cur_retried, e);
+                if cur_retried >= 13 {
+                    error!("retried too many times!");
+                    RetryPolicy::ForwardError(e)
+                } else {
                     retried.set(cur_retried + 1);
+                    RetryPolicy::WaitRetry(Duration::from_secs(1 << cur_retried))
                 }
-            }
-        }
+            }).for_each(&mut handle_update);
+        core.run(future)?;
         // Waiting for any on-going futures.
         while counter.get() > 0 {
             core.turn(None);
