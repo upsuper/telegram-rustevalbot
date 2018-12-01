@@ -3,7 +3,7 @@ use futures::future::Either;
 use futures::{Future, IntoFuture};
 use htmlescape::encode_minimal;
 use itertools::Itertools;
-use log::warn;
+use log::{info, warn};
 use percent_encoding::{utf8_percent_encode, PATH_SEGMENT_ENCODE_SET};
 use reqwest::r#async::Client;
 use reqwest::IntoUrl;
