@@ -11,7 +11,7 @@ pub fn init(shutdown: Arc<Shutdown>) {
     let (tx, rx) = mpsc::channel();
     let watcher = init_watcher(tx).expect("failed to init upgrade watcher");
     thread::spawn(move || {
-        watch_notify_file(&watcher, &rx, shutdown);
+        watch_notify_file(&watcher, &rx, &shutdown);
     });
 }
 
@@ -24,7 +24,7 @@ fn init_watcher(tx: Sender<DebouncedEvent>) -> notify::Result<impl Watcher> {
 fn watch_notify_file(
     _watcher: &impl Watcher,
     rx: &Receiver<DebouncedEvent>,
-    shutdown: Arc<Shutdown>,
+    shutdown: &Shutdown,
 ) {
     for event in rx.iter() {
         debug!("notify: {:?}", event);
