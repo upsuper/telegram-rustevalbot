@@ -6,9 +6,8 @@ use crate::ADMIN_ID;
 use futures::{Future, IntoFuture};
 use log::{debug, info, warn};
 use matches::matches;
+use parking_lot::Mutex;
 use reqwest::r#async::Client;
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
 use std::sync::Arc;
 use telegram_types::bot::types::{ChatType, Message, Update, UpdateContent, UpdateId};
 
@@ -21,8 +20,8 @@ pub use self::command::init;
 pub struct EvalBot {
     bot: Bot,
     executor: Executor,
-    records: Rc<RefCell<RecordService>>,
-    shutdown_id: Rc<Cell<Option<UpdateId>>>,
+    records: Arc<Mutex<RecordService>>,
+    shutdown_id: Arc<Mutex<Option<UpdateId>>>,
 }
 
 type BoxFuture = Box<dyn Future<Item = (), Error = ()>>;
@@ -30,9 +29,9 @@ type BoxFuture = Box<dyn Future<Item = (), Error = ()>>;
 impl EvalBot {
     /// Create new eval bot instance.
     pub fn new(client: Client, bot: Bot, shutdown: Arc<Shutdown>) -> Self {
-        let shutdown_id = Rc::new(Cell::new(None));
+        let shutdown_id = Arc::new(Mutex::new(None));
         let executor = Executor::new(client, bot.username, shutdown, shutdown_id.clone());
-        let records = Rc::new(RefCell::new(RecordService::init()));
+        let records = Arc::new(Mutex::new(RecordService::init()));
         info!("EvalBot authorized as @{}", bot.username);
         EvalBot {
             bot,
@@ -58,7 +57,7 @@ impl EvalBot {
     }
 
     pub fn shutdown(self) -> Box<dyn Future<Item = (), Error = Error>> {
-        if let Some(shutdown_id) = self.shutdown_id.take() {
+        if let Some(shutdown_id) = self.shutdown_id.lock().take() {
             debug!("{}> confirming", shutdown_id.0);
             let bot = self.bot();
             return Box::new(bot.confirm_update(shutdown_id).map(move |_| {
@@ -69,14 +68,14 @@ impl EvalBot {
     }
 
     fn handle_message(&self, id: UpdateId, message: &Message) -> BoxFuture {
-        self.records.borrow_mut().clear_old_records(&message.date);
+        self.records.lock().clear_old_records(&message.date);
         let cmd = match Self::build_command(id, message) {
             Ok(cmd) => cmd,
             Err(()) => return Box::new(Ok(()).into_future()),
         };
         let msg_id = message.message_id;
         self.records
-            .borrow_mut()
+            .lock()
             .push_record(msg_id, message.date.clone());
         let chat_id = message.chat.id;
         let bot = self.bot.clone();
@@ -91,7 +90,7 @@ impl EvalBot {
                     .map(move |msg| {
                         let reply_id = msg.message_id;
                         debug!("{}> sent as {}", id.0, reply_id.0);
-                        records.borrow_mut().set_reply(msg_id, reply_id);
+                        records.lock().set_reply(msg_id, reply_id);
                     }).map_err(move |err| warn!("{}> error: {:?}", id.0, err))
             })),
             None => Box::new(Err(()).into_future()),
@@ -105,7 +104,7 @@ impl EvalBot {
             Err(()) => return Box::new(Ok(()).into_future()),
         };
         let msg_id = message.message_id;
-        let reply_id = match self.records.borrow().find_reply(msg_id) {
+        let reply_id = match self.records.lock().find_reply(msg_id) {
             Some(reply) => reply,
             None => return Box::new(Ok(()).into_future()),
         };
@@ -125,7 +124,7 @@ impl EvalBot {
             })),
             None => Box::new({
                 debug!("{}> deleting", id.0);
-                records.borrow_mut().remove_reply(msg_id);
+                records.lock().remove_reply(msg_id);
                 bot.delete_message(chat_id, reply_id)
                     .execute()
                     .map(move |_| debug!("{}> deleted", id.0))

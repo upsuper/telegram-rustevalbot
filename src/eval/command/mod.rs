@@ -2,11 +2,10 @@ use crate::shutdown::Shutdown;
 use crate::utils::Void;
 use futures::{Future, IntoFuture};
 use log::debug;
+use parking_lot::Mutex;
 use reqwest::r#async::Client;
 use std::borrow::Cow;
-use std::cell::Cell;
 use std::fmt::{self, Debug, Formatter};
-use std::rc::Rc;
 use std::sync::Arc;
 use telegram_types::bot::types::UpdateId;
 
@@ -19,7 +18,7 @@ pub struct Executor {
     /// Channel to trigger shutdown
     shutdown: Arc<Shutdown>,
     /// Update ID of the shutdown message
-    shutdown_id: Rc<Cell<Option<UpdateId>>>,
+    shutdown_id: Arc<Mutex<Option<UpdateId>>>,
 }
 
 pub struct Command<'a> {
@@ -53,7 +52,7 @@ impl Executor {
         client: Client,
         username: &'static str,
         shutdown: Arc<Shutdown>,
-        shutdown_id: Rc<Cell<Option<UpdateId>>>,
+        shutdown_id: Arc<Mutex<Option<UpdateId>>>,
     ) -> Self {
         Executor {
             client,
@@ -78,7 +77,7 @@ impl Executor {
                 return Some(result);
             }
             if cmd.is_private && cmd.is_admin && info.name == "/shutdown" {
-                self.shutdown_id.set(Some(cmd.id));
+                *self.shutdown_id.lock() = Some(cmd.id);
                 self.shutdown.shutdown();
                 return Some(str_to_box_future("start shutting down..."));
             }
