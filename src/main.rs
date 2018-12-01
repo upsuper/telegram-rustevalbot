@@ -76,9 +76,10 @@ lazy_static! {
             .expect("TELEGRAM_TOKEN must be set!")
             .into_boxed_str()
     );
-    static ref ADMIN_ID: Option<UserId> = env::var("BOT_ADMIN_ID")
+    static ref ADMIN_ID: UserId = env::var("BOT_ADMIN_ID")
         .ok()
-        .and_then(|s| str::parse(&s).map(UserId).ok());
+        .and_then(|s| str::parse(&s).map(UserId).ok())
+        .expect("BOT_ADMIN_ID must be a valid user id");
 }
 
 fn main() -> Result<(), Error> {
@@ -202,11 +203,7 @@ fn send_message_to_admin<'a>(
     bot: &Bot,
     text: impl Into<Cow<'a, str>>,
 ) -> Result<(), Error> {
-    let admin_id = match *ADMIN_ID {
-        Some(id) => id,
-        None => return Ok(()),
-    };
-    let chat_id = ChatId(admin_id.0);
+    let chat_id = ChatId(ADMIN_ID.0);
     core.run(bot.send_message(chat_id, text).execute())
         .map(|_| ())
 }

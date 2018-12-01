@@ -154,7 +154,7 @@ impl EvalBot {
             message.message_id.0,
             command
         );
-        let is_admin = ADMIN_ID.map_or(false, |admin_id| admin_id == from.id);
+        let is_admin = *ADMIN_ID == from.id;
         let is_private = matches!(message.chat.kind, ChatType::Private { .. });
         Ok(Command {
             id,
