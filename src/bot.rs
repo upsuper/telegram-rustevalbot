@@ -1,6 +1,7 @@
 use futures::future::Either;
 use futures::sync::oneshot::Receiver;
 use futures::{Async, Future, IntoFuture, Poll, Stream};
+use log::debug;
 use reqwest;
 use reqwest::r#async::{Client, Request};
 use serde::{Deserialize, Serialize};
@@ -181,6 +182,7 @@ impl Stream for UpdateStream {
         }
         loop {
             if let Some(update) = self.buffer.pop_front() {
+                debug!("{}: {:?}", self.bot.username, update);
                 break Ok(Async::Ready(Some(update)));
             }
             let mut request = self.current_request.take().unwrap_or_else(|| {
