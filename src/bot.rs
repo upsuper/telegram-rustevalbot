@@ -38,12 +38,12 @@ impl Bot {
         })
     }
 
-    pub fn get_updates<'s>(
-        &'s self,
+    pub fn get_updates(
+        &self,
         stop_signal: Receiver<()>,
-    ) -> impl Stream<Item = Update, Error = Error> + 's {
+    ) -> impl Stream<Item = Update, Error = Error> {
         UpdateStream {
-            bot: self,
+            bot: self.clone(),
             update_id: None,
             buffer: VecDeque::new(),
             current_request: None,
@@ -153,8 +153,8 @@ impl From<TimerError> for Error {
     }
 }
 
-struct UpdateStream<'a> {
-    bot: &'a Bot,
+struct UpdateStream {
+    bot: Bot,
     update_id: Option<UpdateId>,
     buffer: VecDeque<Update>,
     current_request: Option<PendingFuture>,
@@ -165,7 +165,7 @@ type PendingFuture = Box<dyn Future<Item = Vec<Update>, Error = timeout::Error<E
 
 const TELEGRAM_TIMEOUT_SECS: u16 = 5;
 
-impl<'a> Stream for UpdateStream<'a> {
+impl Stream for UpdateStream {
     type Item = Update;
     type Error = Error;
 
