@@ -28,22 +28,25 @@ extern crate url;
 
 mod bot;
 mod bot_runner;
+mod cratesio;
 mod eval;
 mod shutdown;
 mod upgrade;
 mod utils;
 
 use crate::bot::Bot;
-use crate::eval::EvalBot;
 use crate::shutdown::Shutdown;
-use futures::Future;
+use futures::future::join_all;
+use futures::sync::oneshot::Receiver;
+use futures::{Future, IntoFuture};
 use lazy_static::lazy_static;
 use log::{error, info};
 use reqwest::r#async::Client;
 use signal_hook::iterator::Signals;
 use signal_hook::SIGTERM;
 use std::env;
-use std::io::Write;
+use std::fmt::Write as FmtWrite;
+use std::io::Write as IOWrite;
 use std::sync::Arc;
 use std::thread;
 use telegram_types::bot::types::{ChatId, UserId};
@@ -91,14 +94,27 @@ fn main() {
     let shutdown_clone = shutdown.clone();
     let (eval_future, eval_receiver) = bot_runner::run(
         "eval",
-        "TELEGRAM_TOKEN",
+        "EVAL_TELEGRAM_TOKEN",
         &client,
         shutdown.clone(),
-        move |bot| EvalBot::new(client_clone, bot, shutdown_clone),
+        move |bot| eval::EvalBot::new(client_clone, bot, shutdown_clone),
         |eval_bot, update| eval_bot.handle_update(update),
         |eval_bot| eval_bot.shutdown(),
     );
     runtime.spawn(eval_future);
+
+    // Kick off cratesio bot.
+    let client_clone = client.clone();
+    let (cratesio_future, cratesio_receiver) = bot_runner::run(
+        "cratesio",
+        "CRATESIO_TELEGRAM_TOKEN",
+        &client,
+        shutdown.clone(),
+        move |bot| cratesio::CratesioBot::new(client_clone, bot),
+        |cratesio_bot, update| cratesio_bot.handle_update(update),
+        |_| (Ok(()) as Result<(), ()>).into_future(),
+    );
+    runtime.spawn(cratesio_future);
 
     // Drop the client otherwise shutdown_on_idle below may be blocked
     // by its connection pool.
@@ -112,9 +128,30 @@ fn main() {
             .map_err(|e| error!("failed to send message to admin: {:?}", e))
     }
 
-    let bot = eval_receiver.wait().unwrap().unwrap();
-    let username = bot.username;
-    let start_msg = format!("Start version: {} @{}", VERSION, username);
+    fn bind_name(
+        receiver: Receiver<Result<Bot, ()>>,
+        name: &'static str,
+    ) -> impl Future<Item = (&'static str, Bot), Error = ()> {
+        receiver
+            .map_err(|_| ())
+            .and_then(|b| b)
+            .map(move |b| (name, b))
+    }
+    let (bot, start_msg) = join_all(vec![
+        bind_name(eval_receiver, "eval"),
+        bind_name(cratesio_receiver, "cratesio"),
+    ])
+    .map(|bots| {
+        let mut start_msg = format!("Start version: {}", VERSION);
+        for (name, bot) in bots.iter() {
+            write!(&mut start_msg, "\nbot {} @{}", name, bot.username);
+        }
+        let first_bot = bots.into_iter().next().unwrap().1;
+        (first_bot, start_msg)
+    })
+    .wait()
+    .unwrap();
+
     // This message will be sent with the original client we created above,
     // so use runtime to run it.
     runtime.spawn(send_message_to_admin(&bot, start_msg));

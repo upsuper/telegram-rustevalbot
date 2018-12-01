@@ -9,6 +9,7 @@ use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::time::Duration;
+use telegram_types::bot::inline_mode::{AnswerInlineQuery, InlineQueryId, InlineQueryResult};
 use telegram_types::bot::methods::{
     ApiError, ChatTarget, DeleteMessage, EditMessageText, GetMe, GetUpdates, Method, SendMessage,
     TelegramResult,
@@ -91,6 +92,23 @@ impl Bot {
             message_id,
         };
         self.build_request(&delete_message)
+    }
+
+    pub fn answer_inline_query(
+        &self,
+        inline_query_id: InlineQueryId,
+        results: &[InlineQueryResult],
+    ) -> BotRequest<bool> {
+        let answer = AnswerInlineQuery {
+            inline_query_id: inline_query_id,
+            results: results.into(),
+            cache_time: None,
+            is_personal: None,
+            next_offset: None,
+            switch_pm_text: None,
+            switch_pm_parameter: None,
+        };
+        self.build_request(&answer)
     }
 
     fn build_request<'s, R>(&'s self, request: &R) -> BotRequest<'s, R::Item>
