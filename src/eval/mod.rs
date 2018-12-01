@@ -41,11 +41,6 @@ impl EvalBot {
         }
     }
 
-    /// Borrow the underlying bot.
-    pub fn bot(&self) -> &Bot {
-        &self.bot
-    }
-
     /// Handle the update.
     pub fn handle_update(&self, update: Update) -> BoxFuture {
         let id = update.update_id;
@@ -59,8 +54,7 @@ impl EvalBot {
     pub fn shutdown(self) -> Box<dyn Future<Item = (), Error = Error> + Send> {
         if let Some(shutdown_id) = self.shutdown_id.lock().take() {
             debug!("{}> confirming", shutdown_id.0);
-            let bot = self.bot();
-            return Box::new(bot.confirm_update(shutdown_id).map(move |_| {
+            return Box::new(self.bot.confirm_update(shutdown_id).map(move |_| {
                 debug!("{}> confirmed", shutdown_id.0);
             }));
         }
