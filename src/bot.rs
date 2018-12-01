@@ -143,7 +143,6 @@ where
         let future = self
             .client
             .execute(req)
-            .and_then(|resp| resp.error_for_status())
             .and_then(|mut resp| resp.json())
             .map_err(Error::from)
             .and_then(|result: TelegramResult<T>| Ok(Into::<Result<_, _>>::into(result)?));
