@@ -160,7 +160,6 @@ macro_rules! impl_command_methods {
 }
 
 mod about;
-mod crate_;
 mod doc;
 mod eval;
 mod version;
@@ -212,7 +211,6 @@ macro_rules! commands {
 
 commands! {
     general: [
-        "/crate" => crate_::CrateCommand: "query crate information",
         "/doc" => doc::DocCommand: "query document of Rust's standard library",
         "/eval" => eval::EvalCommand: "evaluate a piece of Rust code",
         "/rustc_version" => version::VersionCommand: "display rustc version being used",

@@ -45,16 +45,6 @@ For convenience, inner attributes and `extern crate`s
 at the beginning of code are moved to the beginning of the wrapped code
 when `--bare` is not used.
 
-#### Crate query
-
-Eval bot can display information about a crate on crates.io
-via `/crate <crate>` command, e.g. `/crate itertools`.
-
-This command supports two other modes via `--keyword` and `--query`.
-With one of the flag specified,
-it would use the argument as keyword or general query string,
-and list the first several items returned from crates.io.
-
 #### Document query
 
 Eval can can display document item from official document
