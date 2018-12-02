@@ -100,7 +100,7 @@ impl Bot {
         results: &[InlineQueryResult],
     ) -> BotRequest<bool> {
         let answer = AnswerInlineQuery {
-            inline_query_id: inline_query_id,
+            inline_query_id,
             results: results.into(),
             cache_time: None,
             is_personal: None,
