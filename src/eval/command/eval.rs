@@ -6,11 +6,18 @@ use lazy_static::lazy_static;
 use log::{debug, warn};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 lazy_static! {
     static ref RE_ERROR: Regex = Regex::new(r"^error\[(E\d{4})\]:").unwrap();
     static ref RE_CODE: Regex = Regex::new(r"`(.+?)`").unwrap();
     static ref RE_ISSUE: Regex = Regex::new(r"\(see issue #(\d+)\)").unwrap();
+}
+
+macro_rules! template {
+    ($($line:expr,)+) => {
+        concat!($($line, '\n',)+)
+    }
 }
 
 pub struct EvalCommand;
@@ -60,10 +67,30 @@ impl CommandImpl for EvalCommand {
         } else {
             let (header, body) = extract_code_headers(arg);
             debug!("extract: {:?} -> ({:?}, {:?})", arg, header, body);
+            let code = if body.contains("println!") || body.contains("print!") {
+                Cow::from(body)
+            } else {
+                Cow::from(format!(
+                    template! {
+                        // Template below would provide the indent of this line.
+                        "println!(\"{{:?}}\", {{",
+                        "        {code}",
+                        "    }});",
+                    },
+                    code = body
+                ))
+            };
             format!(
-                include_str!("eval_template.rs"),
+                template! {
+                    "#![allow(unreachable_code)]",
+                    "{header}",
+                    "",
+                    "fn main() {{",
+                    "    {code}",
+                    "}}",
+                },
                 header = header,
-                code = body,
+                code = code,
             )
         };
         let channel = flags.channel.unwrap_or(Channel::Stable);
