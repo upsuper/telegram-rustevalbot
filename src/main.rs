@@ -39,6 +39,7 @@ use crate::shutdown::Shutdown;
 use futures::future::join_all;
 use futures::sync::oneshot::Receiver;
 use futures::{Future, IntoFuture};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{error, info};
 use reqwest::r#async::Client;
@@ -129,24 +130,25 @@ fn main() {
     }
 
     fn bind_name(
-        receiver: Receiver<Result<Bot, ()>>,
+        receiver: Receiver<Result<Option<Bot>, ()>>,
         name: &'static str,
-    ) -> impl Future<Item = (&'static str, Bot), Error = ()> {
+    ) -> impl Future<Item = Option<(&'static str, Bot)>, Error = ()> {
         receiver
             .map_err(|_| ())
             .and_then(|b| b)
-            .map(move |b| (name, b))
+            .map(move |b| b.map(move |b| (name, b)))
     }
     let (bot, start_msg) = join_all(vec![
         bind_name(eval_receiver, "eval"),
         bind_name(cratesio_receiver, "cratesio"),
     ])
     .map(|bots| {
+        let bots = bots.into_iter().filter_map(|info| info).collect_vec();
         let mut start_msg = format!("Start version: {}", VERSION);
         for (name, bot) in bots.iter() {
             write!(&mut start_msg, "\nbot {} @{}", name, bot.username);
         }
-        let first_bot = bots.into_iter().next().unwrap().1;
+        let (_, first_bot) = bots.into_iter().next().expect("no bot configured?");
         (first_bot, start_msg)
     })
     .wait()

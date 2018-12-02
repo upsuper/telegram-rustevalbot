@@ -1,10 +1,11 @@
 use crate::bot::{Bot, Error};
 use crate::shutdown::Shutdown;
+use futures::future::Either;
 use futures::sync::oneshot::{channel, Receiver};
-use futures::{Async, Future, Poll, Stream};
-use log::{error, warn};
+use futures::{Async, Future, IntoFuture, Poll, Stream};
+use log::{error, info, warn};
 use reqwest::r#async::Client;
-use std::env;
+use std::env::{self, VarError};
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,7 +22,7 @@ pub fn run<Impl, Creator, Handler, HandleResult, BotShutdown, BotShutdownResult,
     bot_shutdown: BotShutdown,
 ) -> (
     impl Future<Item = (), Error = ()> + Send,
-    Receiver<Result<Bot, ()>>,
+    Receiver<Result<Option<Bot>, ()>>,
 )
 where
     Impl: Send + Sync + 'static,
@@ -32,16 +33,22 @@ where
     BotShutdownResult: Future<Item = (), Error = BotShutdownError> + Send + 'static,
     BotShutdownError: Debug,
 {
-    let token = Box::leak(
-        env::var(token_env)
-            .unwrap_or_else(|e| panic!("{} must be set for {}: {:?}", token_env, name, e))
-            .into_boxed_str(),
-    );
     let (sender, receiver) = channel();
+    let token = match env::var(token_env) {
+        Ok(token) => Box::leak(token.into_boxed_str()),
+        Err(VarError::NotPresent) => {
+            info!("{} wouldn't start because {} is not set", name, token_env);
+            sender.send(Ok(None)).unwrap();
+            return (Either::A(Ok(()).into_future()), receiver);
+        }
+        Err(VarError::NotUnicode(s)) => {
+            panic!("invalid value for {}: {:?}", token_env, s);
+        }
+    };
     let future = Bot::create(client.clone(), token)
         .then(move |bot_result| {
             let result = bot_result.map_err(|e| error!("failed to init bot for {}: {:?}", name, e));
-            sender.send(result.clone()).unwrap();
+            sender.send(result.clone().map(|bot| Some(bot))).unwrap();
             result
         })
         .and_then(move |bot| {
@@ -60,7 +67,7 @@ where
                 error!("failed to shutdown {}: {:?}", name, e);
             })
         });
-    (future, receiver)
+    (Either::B(future), receiver)
 }
 
 struct BotRun<Updates, Impl, Handler> {

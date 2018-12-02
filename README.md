@@ -72,21 +72,25 @@ Telegram would should a menu for user to select crate from.
 This bot program uses environment variable for config,
 and also recognize `.env` file in the working directory.
 
-It requires three environment variables:
-* `EVAL_TELEGRAM_TOKEN`: bot token for the Eval bot
-* `CRATESIO_TELEGRAM_TOKEN`: bot token for the Crates.io bot
-* `BOT_ADMIN_ID`: the User ID of admin account
+Bot tokens can be specified via:
+* `EVAL_TELEGRAM_TOKEN`: the Eval bot
+* `CRATESIO_TELEGRAM_TOKEN`: the Crates.io bot
 
+At least one of the tokens must be provided.
 The bot tokens can be created with [@BotFather](https://t.me/BotFather).
+
+It also requires `BOT_ADMIN_ID` to be specified as the User ID of admin account.
+The bot program will send message to the account when it starts and stops
+via the first configured bot in the order of the list above.
+
+If the Eval bot is enabled,
+admin would be able to use `/shutdown` command on that bot to stop the program.
 
 For the User ID, one can get their own User ID
 via [@userinfobot](https://t.me/userinfobot)
 or [@JsonDumpBot](https://t.me/JsonDumpBot).
 
-The bot program will send message to the admin account when it starts and stops.
-Admin would also be able to use `/shutdown` command to stop it.
-
-This bot requires write permission to `record_list.json`
+The Eval bot requires write permission to `record_list.json`
 in the current directory in order to persist command information
 across reboot for command editing.
 
