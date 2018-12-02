@@ -116,9 +116,18 @@ impl Crate {
             encode_minimal(&self.max_version)
         );
         if let Some(description) = &description {
-            let description = encode_minimal(description);
-            message.push_str(" - ");
-            message.push_str(&description);
+            message.push('\n');
+            let mut is_code = false;
+            for chunk in encode_minimal(description).split('`') {
+                if !is_code {
+                    message.push_str(chunk);
+                } else {
+                    message.push_str("<code>");
+                    message.push_str(chunk);
+                    message.push_str("</code>");
+                }
+                is_code = !is_code;
+            }
         }
 
         let name_url = encode_for_url(&self.name);
