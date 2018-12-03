@@ -16,6 +16,7 @@ script:
   - cargo build --release --verbose
   - cargo test --release --verbose
   - strip target/release/telegram-rustevalbot
+  - cp target/release/telegram-rustevalbot /tmp/
 
 before_cache:
   - rm -rf target/{debug,release}/telegram-rustevalbot*
@@ -27,6 +28,7 @@ before_cache:
 deploy:
   - provider: script
     script: cd ./ci && bash deploy.sh
+    # It doesn't actually matter... but it's faster this way :)
     skip_cleanup: true
     on:
       branch: master
