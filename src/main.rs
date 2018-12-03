@@ -27,6 +27,7 @@ extern crate tokio_timer;
 extern crate unicode_width;
 extern crate url;
 
+mod rustdoc;
 mod bot;
 mod bot_runner;
 mod cratesio;
