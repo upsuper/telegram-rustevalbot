@@ -25,18 +25,8 @@ before_cache:
   - rm -rf target/{debug,release}/deps/telegram_rustevalbot-*
   - rm -rf target/debug/incremental
 
-after_success:
-  - git rev-parse HEAD > upgrade
-  - cat ci/server_ssh_key >> $HOME/.ssh/known_hosts
-  - openssl aes-256-cbc
-    -K $encrypted_782b57b1cc27_key
-    -iv $encrypted_782b57b1cc27_iv
-    -in ci/deploy_rsa.enc
-    -out /tmp/deploy_rsa
-    -d
-  - chmod 0600 /tmp/deploy_rsa
-  - sftp -i /tmp/deploy_rsa
-         -b ci/deploy.sftp
-         -P 2222
-         rustevalbot@vps11.upsuper.org
-  - rm /tmp/deploy_rsa
+deploy:
+  - provider: script
+    script: cd ./ci && bash deploy.sh
+    on:
+      branch: master
