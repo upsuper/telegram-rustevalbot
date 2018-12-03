@@ -1,4 +1,4 @@
-use super::{BoxCommandFuture, CommandImpl, ExecutionContext};
+use crate::eval::command::{BoxCommandFuture, CommandImpl, ExecutionContext};
 use crate::utils::{self, WidthCountingWriter};
 use fst_subseq_ascii_caseless::SubseqAsciiCaseless;
 use futures::IntoFuture;
