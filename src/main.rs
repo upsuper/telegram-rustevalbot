@@ -38,7 +38,7 @@ use crate::bot::Bot;
 use crate::shutdown::Shutdown;
 use futures::future::join_all;
 use futures::sync::oneshot::Receiver;
-use futures::{Future, IntoFuture};
+use futures::Future;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{error, info};
@@ -74,6 +74,12 @@ lazy_static! {
         .ok()
         .and_then(|s| str::parse(&s).map(UserId).ok())
         .expect("BOT_ADMIN_ID must be a valid user id");
+    static ref ABOUT_MESSAGE: String = format!(
+        "{} {}\n{}",
+        env!("CARGO_PKG_NAME"),
+        VERSION,
+        env!("CARGO_PKG_HOMEPAGE")
+    );
 }
 
 fn main() {
@@ -92,15 +98,13 @@ fn main() {
 
     // Kick off eval bot.
     let client_clone = client.clone();
-    let shutdown_clone = shutdown.clone();
     let (eval_future, eval_receiver) = bot_runner::run(
         "eval",
         "EVAL_TELEGRAM_TOKEN",
         &client,
         shutdown.clone(),
-        move |bot| eval::EvalBot::new(client_clone, bot, shutdown_clone),
+        move |bot| eval::EvalBot::new(client_clone, bot),
         |eval_bot, update| eval_bot.handle_update(update),
-        |eval_bot| eval_bot.shutdown(),
     );
     runtime.spawn(eval_future);
 
@@ -113,7 +117,6 @@ fn main() {
         shutdown.clone(),
         move |bot| cratesio::CratesioBot::new(client_clone, bot),
         |cratesio_bot, update| cratesio_bot.handle_update(update),
-        |_| (Ok(()) as Result<(), ()>).into_future(),
     );
     runtime.spawn(cratesio_future);
 

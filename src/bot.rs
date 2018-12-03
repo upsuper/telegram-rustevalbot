@@ -180,6 +180,12 @@ pub struct UpdateStream {
     stop_signal: Receiver<()>,
 }
 
+impl UpdateStream {
+    pub fn bot(&self) -> &Bot {
+        &self.bot
+    }
+}
+
 type PendingFuture = Box<dyn Future<Item = Vec<Update>, Error = timeout::Error<Error>> + Send>;
 
 const TELEGRAM_TIMEOUT_SECS: u16 = 5;

@@ -1,12 +1,9 @@
-use crate::shutdown::Shutdown;
 use crate::utils::Void;
 use futures::{Future, IntoFuture};
 use log::debug;
-use parking_lot::Mutex;
 use reqwest::r#async::Client;
 use std::borrow::Cow;
 use std::fmt::{self, Debug, Formatter};
-use std::sync::Arc;
 use telegram_types::bot::types::UpdateId;
 
 /// Command executor.
@@ -15,10 +12,6 @@ pub struct Executor {
     client: Client,
     /// Telegram username of the bot
     username: &'static str,
-    /// Channel to trigger shutdown
-    shutdown: Arc<Shutdown>,
-    /// Update ID of the shutdown message
-    shutdown_id: Arc<Mutex<Option<UpdateId>>>,
 }
 
 pub struct Command<'a> {
@@ -27,7 +20,6 @@ pub struct Command<'a> {
     /// The command text
     pub command: &'a str,
     /// Whether this command is from an admin
-    pub is_admin: bool,
     /// Whether this command is in private chat
     pub is_private: bool,
 }
@@ -51,14 +43,10 @@ impl Executor {
     pub fn new(
         client: Client,
         username: &'static str,
-        shutdown: Arc<Shutdown>,
-        shutdown_id: Arc<Mutex<Option<UpdateId>>>,
     ) -> Self {
         Executor {
             client,
             username,
-            shutdown,
-            shutdown_id,
         }
     }
 
@@ -75,11 +63,6 @@ impl Executor {
             };
             if let Some(result) = execute_command_with_name(info.name, &context, info.args) {
                 return Some(result);
-            }
-            if cmd.is_private && cmd.is_admin && info.name == "/shutdown" {
-                *self.shutdown_id.lock() = Some(cmd.id);
-                self.shutdown.shutdown();
-                return Some(str_to_box_future("start shutting down..."));
             }
         }
         None
@@ -159,7 +142,6 @@ macro_rules! impl_command_methods {
     }
 }
 
-mod about;
 mod doc;
 mod eval;
 mod version;
@@ -217,7 +199,6 @@ commands! {
     ];
     specific: [
         "/version" => version::VersionCommand: "display rustc version being used",
-        "/about" => about::AboutCommand: "display information about this bot",
     ];
 }
 

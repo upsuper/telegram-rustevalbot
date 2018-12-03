@@ -1,25 +1,24 @@
 use crate::bot::{Bot, UpdateStream};
 use crate::shutdown::Shutdown;
+use crate::utils;
 use futures::future::Either;
 use futures::sync::oneshot::{channel, Receiver};
 use futures::{Async, Future, IntoFuture, Poll, Stream};
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use reqwest::r#async::Client;
 use std::env::{self, VarError};
-use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
-use telegram_types::bot::types::Update;
+use telegram_types::bot::types::{Update, UpdateContent};
 use tokio_timer::Delay;
 
-pub fn run<Impl, Creator, Handler, HandleResult, BotShutdown, BotShutdownResult, BotShutdownError>(
+pub fn run<Impl, Creator, Handler, HandleResult>(
     name: &'static str,
     token_env: &'static str,
     client: &Client,
     shutdown: Arc<Shutdown>,
     create_impl: Creator,
     handle_update: Handler,
-    bot_shutdown: BotShutdown,
 ) -> (
     impl Future<Item = (), Error = ()> + Send,
     Receiver<Result<Option<Bot>, ()>>,
@@ -29,9 +28,6 @@ where
     Creator: (FnOnce(Bot) -> Impl) + Send + 'static,
     Handler: (Fn(&Impl, Update) -> HandleResult) + Send + Sync + 'static,
     HandleResult: Future<Item = (), Error = ()> + Send + 'static,
-    BotShutdown: (FnOnce(Impl) -> BotShutdownResult) + Send + 'static,
-    BotShutdownResult: Future<Item = (), Error = BotShutdownError> + Send + 'static,
-    BotShutdownError: Debug,
 {
     let (sender, receiver) = channel();
     let token = match env::var(token_env) {
@@ -52,41 +48,35 @@ where
             result
         })
         .and_then(move |bot| {
-            let stream = bot.get_updates(shutdown.register());
-            let bot_impl = Some(create_impl(bot));
             BotRun {
-                stream,
-                bot_impl,
+                stream: bot.get_updates(shutdown.register()),
+                bot_impl: create_impl(bot),
                 handle_update,
                 retried: 0,
                 delay: None,
+                shutdown,
             }
-        })
-        .and_then(move |bot_impl| {
-            bot_shutdown(bot_impl).map_err(move |e| {
-                error!("failed to shutdown {}: {:?}", name, e);
-            })
         });
     (Either::B(future), receiver)
 }
 
 struct BotRun<Impl, Handler> {
     stream: UpdateStream,
-    bot_impl: Option<Impl>,
+    bot_impl: Impl,
     handle_update: Handler,
     retried: usize,
     delay: Option<Delay>,
+    shutdown: Arc<Shutdown>,
 }
 
-impl<Impl, Handler, HandleResult> Future for BotRun<Impl, Handler>
+impl<Impl, Handler> Future for BotRun<Impl, Handler>
 where
-    Handler: Fn(&Impl, Update) -> HandleResult,
-    HandleResult: Future<Item = (), Error = ()> + Send + 'static,
+    Self: UpdateHandler,
 {
-    type Item = Impl;
+    type Item = ();
     type Error = ();
 
-    fn poll(&mut self) -> Poll<Impl, ()> {
+    fn poll(&mut self) -> Poll<(), ()> {
         loop {
             if let Some(delay) = &mut self.delay {
                 match delay.poll() {
@@ -106,11 +96,12 @@ where
                     match result {
                         Async::NotReady => break Ok(Async::NotReady),
                         Async::Ready(None) => {
-                            break Ok(Async::Ready(self.bot_impl.take().unwrap()));
+                            break Ok(Async::Ready(()));
                         }
                         Async::Ready(Some(update)) => {
-                            let bot_impl = self.bot_impl.as_ref().unwrap();
-                            tokio::spawn((self.handle_update)(bot_impl, update));
+                            self.handle_update(update);
+                            // Go through the loop again to ensure that
+                            // we don't get stuck.
                         }
                     }
                 }
@@ -127,5 +118,70 @@ where
                 }
             }
         }
+    }
+}
+
+trait UpdateHandler {
+    fn handle_update(&self, update: Update);
+}
+
+impl<Impl, Handler, HandleResult> UpdateHandler for BotRun<Impl, Handler>
+where
+    Handler: Fn(&Impl, Update) -> HandleResult,
+    HandleResult: Future<Item = (), Error = ()> + Send + 'static,
+{
+    fn handle_update(&self, update: Update) {
+        debug!("{}> handling", update.update_id.0);
+        if !self.may_handle_common_command(&update) {
+            tokio::spawn((self.handle_update)(&self.bot_impl, update));
+        }
+    }
+}
+
+impl<Impl, Handler> BotRun<Impl, Handler> {
+    fn may_handle_common_command(&self, update: &Update) -> bool {
+        let message = match &update.content {
+            UpdateContent::Message(message) => message,
+            _ => return false,
+        };
+        if !utils::is_message_from_private_chat(message) {
+            return false;
+        }
+        let command = match &message.text {
+            Some(text) => text,
+            _ => return false,
+        };
+        let chat_id = message.chat.id;
+        let update_id = update.update_id;
+        let bot = self.stream.bot();
+        let send_reply = |text: &str| {
+            let future = bot
+                .send_message(chat_id, text)
+                .execute()
+                .map(move |msg| {
+                    debug!("{}> sent about message as {}", update_id.0, msg.message_id.0);
+                })
+                .map_err(move |err| warn!("{}> error: {:?}", update_id.0, err));
+            tokio::spawn(future);
+        };
+        match command.trim() {
+            "/about" => {
+                send_reply(&crate::ABOUT_MESSAGE);
+            }
+            "/shutdown" => {
+                let is_admin = message.from.as_ref()
+                    .map_or(false, |from| from.id == *crate::ADMIN_ID);
+                if !is_admin {
+                    return false;
+                }
+                send_reply("start shutting down...");
+                self.shutdown.shutdown();
+                tokio::spawn(bot.confirm_update(update_id).map_err(|e| {
+                    error!("failed to confirm: {:?}", e);
+                }));
+            }
+            _ => return false,
+        }
+        true
     }
 }

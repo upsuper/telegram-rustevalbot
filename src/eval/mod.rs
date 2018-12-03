@@ -1,15 +1,13 @@
 use self::command::{Command, Executor};
 use self::record::RecordService;
-use crate::bot::{Bot, Error};
-use crate::shutdown::Shutdown;
-use crate::ADMIN_ID;
+use crate::bot::Bot;
+use crate::utils;
 use futures::{Future, IntoFuture};
 use log::{debug, info, warn};
-use matches::matches;
 use parking_lot::Mutex;
 use reqwest::r#async::Client;
 use std::sync::Arc;
-use telegram_types::bot::types::{ChatType, Message, Update, UpdateContent, UpdateId};
+use telegram_types::bot::types::{Message, Update, UpdateContent, UpdateId};
 
 mod command;
 mod record;
@@ -21,23 +19,20 @@ pub struct EvalBot {
     bot: Bot,
     executor: Executor,
     records: Arc<Mutex<RecordService>>,
-    shutdown_id: Arc<Mutex<Option<UpdateId>>>,
 }
 
 type BoxFuture = Box<dyn Future<Item = (), Error = ()> + Send>;
 
 impl EvalBot {
     /// Create new eval bot instance.
-    pub fn new(client: Client, bot: Bot, shutdown: Arc<Shutdown>) -> Self {
-        let shutdown_id = Arc::new(Mutex::new(None));
-        let executor = Executor::new(client, bot.username, shutdown, shutdown_id.clone());
+    pub fn new(client: Client, bot: Bot) -> Self {
+        let executor = Executor::new(client, bot.username);
         let records = Arc::new(Mutex::new(RecordService::init()));
         info!("EvalBot authorized as @{}", bot.username);
         EvalBot {
             bot,
             executor,
             records,
-            shutdown_id,
         }
     }
 
@@ -49,16 +44,6 @@ impl EvalBot {
             UpdateContent::EditedMessage(message) => self.handle_edit_message(id, &message),
             _ => Box::new(Ok(()).into_future()),
         }
-    }
-
-    pub fn shutdown(self) -> Box<dyn Future<Item = (), Error = Error> + Send> {
-        if let Some(shutdown_id) = self.shutdown_id.lock().take() {
-            debug!("{}> confirming", shutdown_id.0);
-            return Box::new(self.bot.confirm_update(shutdown_id).map(move |_| {
-                debug!("{}> confirmed", shutdown_id.0);
-            }));
-        }
-        Box::new(Ok(()).into_future())
     }
 
     fn handle_message(&self, id: UpdateId, message: &Message) -> BoxFuture {
@@ -149,12 +134,10 @@ impl EvalBot {
             message.message_id.0,
             command
         );
-        let is_admin = *ADMIN_ID == from.id;
-        let is_private = matches!(message.chat.kind, ChatType::Private { .. });
+        let is_private = utils::is_message_from_private_chat(&message);
         Ok(Command {
             id,
             command,
-            is_admin,
             is_private,
         })
     }

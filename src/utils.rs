@@ -1,6 +1,8 @@
+use matches::matches;
 use reqwest;
 use std::borrow::Cow;
 use std::fmt;
+use telegram_types::bot::types::{Message, ChatType};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(Clone, Copy, Debug)]
@@ -73,6 +75,10 @@ impl<W: fmt::Write> fmt::Write for WidthCountingWriter<W> {
         self.width += s.width_cjk();
         self.inner.write_str(s)
     }
+}
+
+pub fn is_message_from_private_chat(message: &Message) -> bool {
+    matches!(message.chat.kind, ChatType::Private { .. })
 }
 
 #[cfg(test)]
