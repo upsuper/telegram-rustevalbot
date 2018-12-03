@@ -7,18 +7,16 @@ matrix:
   include:
     - os: linux
       rust: stable
-      cache: cargo
     - os: osx
       rust: stable
-      cache: cargo
     - os: windows
       rust: stable
-      cache: cargo
     - os: linux
       rust: beta
-      cache: cargo
     - os: linux
       rust: nightly
+
+cache: cargo
 
 env:
   # Disable rustc info cache because it causes .rustc_info.json to keep
@@ -33,11 +31,7 @@ script:
   - bash ci/prepare_deploy.sh
 
 before_cache:
-  - rm -rf target/{debug,release}/telegram-rustevalbot*
-  - rm -rf target/{debug,release}/telegram_rustevalbot-*
-  - rm -rf target/{debug,release}/{build,.fingerprint}/telegram-rustevalbot-*
-  - rm -rf target/{debug,release}/deps/telegram_rustevalbot-*
-  - rm -rf target/debug/incremental
+  - bash ci/cleanup_for_cache.sh
 
 deploy:
   - provider: script
