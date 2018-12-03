@@ -44,10 +44,7 @@ impl Bot {
         Bot { client, ..self }
     }
 
-    pub fn get_updates(
-        &self,
-        stop_signal: Receiver<()>,
-    ) -> impl Stream<Item = Update, Error = Error> {
+    pub fn get_updates(&self, stop_signal: Receiver<()>) -> UpdateStream {
         UpdateStream {
             bot: self.clone(),
             update_id: None,
@@ -175,7 +172,7 @@ impl From<TimerError> for Error {
     }
 }
 
-struct UpdateStream {
+pub struct UpdateStream {
     bot: Bot,
     update_id: Option<UpdateId>,
     buffer: VecDeque<Update>,

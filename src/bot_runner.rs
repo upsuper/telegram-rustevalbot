@@ -1,4 +1,4 @@
-use crate::bot::{Bot, Error};
+use crate::bot::{Bot, UpdateStream};
 use crate::shutdown::Shutdown;
 use futures::future::Either;
 use futures::sync::oneshot::{channel, Receiver};
@@ -70,17 +70,16 @@ where
     (Either::B(future), receiver)
 }
 
-struct BotRun<Updates, Impl, Handler> {
-    stream: Updates,
+struct BotRun<Impl, Handler> {
+    stream: UpdateStream,
     bot_impl: Option<Impl>,
     handle_update: Handler,
     retried: usize,
     delay: Option<Delay>,
 }
 
-impl<Updates, Impl, Handler, HandleResult> Future for BotRun<Updates, Impl, Handler>
+impl<Impl, Handler, HandleResult> Future for BotRun<Impl, Handler>
 where
-    Updates: Stream<Item = Update, Error = Error>,
     Handler: Fn(&Impl, Update) -> HandleResult,
     HandleResult: Future<Item = (), Error = ()> + Send + 'static,
 {
