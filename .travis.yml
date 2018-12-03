@@ -40,5 +40,5 @@ deploy:
     skip_cleanup: true
     on:
       branch: master
-      os: linux
       rust: stable
+      condition: "$TRAVIS_OS_NAME" == "linux"
