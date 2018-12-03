@@ -1,9 +1,24 @@
 language: rust
 
-rust:
-  - stable
-
-cache: cargo
+matrix:
+  fast_finish: true
+  allow_failures:
+    - rust: nightly
+  include:
+    - os: linux
+      rust: stable
+      cache: cargo
+    - os: osx
+      rust: stable
+      cache: cargo
+    - os: windows
+      rust: stable
+      cache: cargo
+    - os: linux
+      rust: beta
+      cache: cargo
+    - os: linux
+      rust: nightly
 
 env:
   # Disable rustc info cache because it causes .rustc_info.json to keep
@@ -15,8 +30,7 @@ script:
   - cargo test --verbose
   - cargo build --release --verbose
   - cargo test --release --verbose
-  - strip target/release/telegram-rustevalbot
-  - cp target/release/telegram-rustevalbot /tmp/
+  - bash ci/prepare_deploy.sh
 
 before_cache:
   - rm -rf target/{debug,release}/telegram-rustevalbot*
@@ -32,3 +46,5 @@ deploy:
     skip_cleanup: true
     on:
       branch: master
+      os: linux
+      rust: stable
