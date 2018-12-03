@@ -35,6 +35,8 @@ mod upgrade;
 mod utils;
 
 use crate::bot::Bot;
+use crate::cratesio::CratesioBot;
+use crate::eval::EvalBot;
 use crate::shutdown::Shutdown;
 use futures::future::join_all;
 use futures::sync::oneshot::Receiver;
@@ -103,8 +105,8 @@ fn main() {
         "EVAL_TELEGRAM_TOKEN",
         &client,
         shutdown.clone(),
-        move |bot| eval::EvalBot::new(client_clone, bot),
-        |eval_bot, update| eval_bot.handle_update(update),
+        move |bot| EvalBot::new(client_clone, bot),
+        EvalBot::handle_update,
     );
     runtime.spawn(eval_future);
 
@@ -115,8 +117,8 @@ fn main() {
         "CRATESIO_TELEGRAM_TOKEN",
         &client,
         shutdown.clone(),
-        move |bot| cratesio::CratesioBot::new(client_clone, bot),
-        |cratesio_bot, update| cratesio_bot.handle_update(update),
+        move |bot| CratesioBot::new(client_clone, bot),
+        CratesioBot::handle_update,
     );
     runtime.spawn(cratesio_future);
 
