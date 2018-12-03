@@ -40,14 +40,8 @@ type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void> + Sen
 
 impl Executor {
     /// Create new command executor.
-    pub fn new(
-        client: Client,
-        username: &'static str,
-    ) -> Self {
-        Executor {
-            client,
-            username,
-        }
+    pub fn new(client: Client, username: &'static str) -> Self {
+        Executor { client, username }
     }
 
     /// Execute a command.
