@@ -2,7 +2,7 @@ use matches::matches;
 use reqwest;
 use std::borrow::Cow;
 use std::fmt;
-use telegram_types::bot::types::{Message, ChatType};
+use telegram_types::bot::types::{ChatType, Message};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(Clone, Copy, Debug)]

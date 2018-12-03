@@ -47,15 +47,13 @@ where
             sender.send(result.clone().map(|bot| Some(bot))).unwrap();
             result
         })
-        .and_then(move |bot| {
-            BotRun {
-                stream: bot.get_updates(shutdown.register()),
-                bot_impl: create_impl(bot),
-                handle_update,
-                retried: 0,
-                delay: None,
-                shutdown,
-            }
+        .and_then(move |bot| BotRun {
+            stream: bot.get_updates(shutdown.register()),
+            bot_impl: create_impl(bot),
+            handle_update,
+            retried: 0,
+            delay: None,
+            shutdown,
         });
     (Either::B(future), receiver)
 }
@@ -159,7 +157,10 @@ impl<Impl, Handler> BotRun<Impl, Handler> {
                 .send_message(chat_id, text)
                 .execute()
                 .map(move |msg| {
-                    debug!("{}> sent about message as {}", update_id.0, msg.message_id.0);
+                    debug!(
+                        "{}> sent about message as {}",
+                        update_id.0, msg.message_id.0
+                    );
                 })
                 .map_err(move |err| warn!("{}> error: {:?}", update_id.0, err));
             tokio::spawn(future);
@@ -169,7 +170,9 @@ impl<Impl, Handler> BotRun<Impl, Handler> {
                 send_reply(&crate::ABOUT_MESSAGE);
             }
             "/shutdown" => {
-                let is_admin = message.from.as_ref()
+                let is_admin = message
+                    .from
+                    .as_ref()
                     .map_or(false, |from| from.id == *crate::ADMIN_ID);
                 if !is_admin {
                     return false;
