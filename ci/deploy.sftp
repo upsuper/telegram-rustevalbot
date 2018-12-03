@@ -1,3 +1,3 @@
 -rm telegram-rustevalbot
-put /tmp/telegram-rustevalbot
-put upgrade workdir/
+put ../target/release/telegram-rustevalbot
+put /tmp/upgrade workdir/

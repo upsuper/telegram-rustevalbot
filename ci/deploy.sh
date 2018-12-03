@@ -1,4 +1,4 @@
-git rev-parse HEAD > upgrade
+git rev-parse HEAD > /tmp/upgrade
 cat server_ssh_key >> $HOME/.ssh/known_hosts
 openssl aes-256-cbc \
     -K $encrypted_782b57b1cc27_key \
