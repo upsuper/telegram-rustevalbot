@@ -17,6 +17,7 @@ extern crate reqwest;
 extern crate rustdoc_seeker;
 extern crate serde;
 extern crate serde_json;
+#[cfg(unix)]
 extern crate signal_hook;
 #[cfg(test)]
 extern crate string_cache;
@@ -45,7 +46,9 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{error, info};
 use reqwest::r#async::Client;
+#[cfg(unix)]
 use signal_hook::iterator::Signals;
+#[cfg(unix)]
 use signal_hook::SIGTERM;
 use std::env;
 use std::fmt::Write as FmtWrite;
@@ -89,6 +92,8 @@ fn main() {
     let _ = dotenv::from_path(std::env::current_dir().unwrap().join(".env"));
     let shutdown = Shutdown::new();
     init_logger();
+
+    #[cfg(unix)]
     init_signal_handler(shutdown.clone());
     upgrade::init(shutdown.clone());
     eval::init();
@@ -207,6 +212,7 @@ fn init_logger() {
         .init();
 }
 
+#[cfg(unix)]
 fn init_signal_handler(shutdown: Arc<Shutdown>) {
     let signals = Signals::new(&[SIGTERM]).expect("failed to init signal handler");
     thread::spawn(move || {
