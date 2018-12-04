@@ -1,5 +1,4 @@
 use crate::utils::Void;
-use crate::rustdoc;
 use futures::{Future, IntoFuture};
 use log::debug;
 use reqwest::r#async::Client;
@@ -140,8 +139,6 @@ macro_rules! impl_command_methods {
 mod eval;
 mod version;
 
-pub use crate::rustdoc::init;
-
 macro_rules! commands {
     {
         general: [
@@ -187,7 +184,6 @@ macro_rules! commands {
 
 commands! {
     general: [
-        "/doc" => rustdoc::DocCommand: "query document of Rust's standard library",
         "/eval" => eval::EvalCommand: "evaluate a piece of Rust code",
         "/rustc_version" => version::VersionCommand: "display rustc version being used",
     ];

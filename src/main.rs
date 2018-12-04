@@ -93,7 +93,6 @@ fn main() {
     #[cfg(unix)]
     signal::init(shutdown.clone());
     upgrade::init(shutdown.clone());
-    eval::init();
 
     info!("Running as `{}`", USER_AGENT);
 
