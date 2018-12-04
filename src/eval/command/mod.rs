@@ -1,4 +1,5 @@
 use crate::utils::Void;
+use crate::rustdoc;
 use futures::{Future, IntoFuture};
 use log::debug;
 use reqwest::r#async::Client;
@@ -184,6 +185,10 @@ macro_rules! commands {
 
 commands! {
     general: [
+<<<<<<< HEAD
+=======
+        "/doc" => rustdoc::DocCommand: "query document of Rust's standard library",
+>>>>>>> fcf79d7f7def0a3b6c47d2b1b0731da4f7ddc304
         "/eval" => eval::EvalCommand: "evaluate a piece of Rust code",
         "/rustc_version" => version::VersionCommand: "display rustc version being used",
     ];
