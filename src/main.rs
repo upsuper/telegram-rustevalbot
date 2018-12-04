@@ -32,6 +32,8 @@ mod bot_runner;
 mod cratesio;
 mod eval;
 mod shutdown;
+#[cfg(unix)]
+mod signal;
 mod upgrade;
 mod utils;
 
@@ -46,15 +48,9 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{error, info};
 use reqwest::r#async::Client;
-#[cfg(unix)]
-use signal_hook::iterator::Signals;
-#[cfg(unix)]
-use signal_hook::SIGTERM;
 use std::env;
 use std::fmt::Write as FmtWrite;
 use std::io::Write as IOWrite;
-use std::sync::Arc;
-use std::thread;
 use telegram_types::bot::types::{ChatId, UserId};
 use tokio::runtime::Runtime;
 
@@ -90,11 +86,11 @@ lazy_static! {
 fn main() {
     // We don't care if we fail to load .env file.
     let _ = dotenv::from_path(std::env::current_dir().unwrap().join(".env"));
-    let shutdown = Shutdown::new();
     init_logger();
 
+    let shutdown = Shutdown::new();
     #[cfg(unix)]
-    init_signal_handler(shutdown.clone());
+    signal::init(shutdown.clone());
     upgrade::init(shutdown.clone());
     eval::init();
 
@@ -210,23 +206,6 @@ fn init_logger() {
             write_header.and(write_module_path).and(write_args)
         })
         .init();
-}
-
-#[cfg(unix)]
-fn init_signal_handler(shutdown: Arc<Shutdown>) {
-    let signals = Signals::new(&[SIGTERM]).expect("failed to init signal handler");
-    thread::spawn(move || {
-        for signal in signals.forever() {
-            match signal {
-                SIGTERM => {
-                    info!("SIGTERM");
-                    shutdown.shutdown();
-                    break;
-                }
-                _ => unreachable!(),
-            }
-        }
-    });
 }
 
 fn build_client() -> Client {
