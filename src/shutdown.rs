@@ -9,7 +9,7 @@ pub struct Shutdown {
 }
 
 impl Shutdown {
-    pub fn new() -> Arc<Self> {
+    pub fn create() -> Arc<Self> {
         Arc::new(Shutdown {
             queue: Mutex::new(Some(Vec::new())),
         })

@@ -44,7 +44,7 @@ where
     let future = Bot::create(client.clone(), token)
         .then(move |bot_result| {
             let result = bot_result.map_err(|e| error!("failed to init bot for {}: {:?}", name, e));
-            sender.send(result.clone().map(|bot| Some(bot))).unwrap();
+            sender.send(result.clone().map(Some)).unwrap();
             result
         })
         .and_then(move |bot| BotRun {

@@ -59,7 +59,7 @@ fn main() {
     let _ = dotenv::from_path(std::env::current_dir().unwrap().join(".env"));
     init_logger();
 
-    let shutdown = Shutdown::new();
+    let shutdown = Shutdown::create();
     #[cfg(unix)]
     signal::init(shutdown.clone());
     upgrade::init(shutdown.clone());
