@@ -1,32 +1,3 @@
-extern crate combine;
-extern crate dotenv;
-extern crate env_logger;
-extern crate fst;
-extern crate fst_subseq_ascii_caseless;
-extern crate futures;
-extern crate htmlescape;
-extern crate itertools;
-extern crate lazy_static;
-extern crate log;
-extern crate matches;
-extern crate notify;
-extern crate parking_lot;
-extern crate percent_encoding;
-extern crate regex;
-extern crate reqwest;
-extern crate rustdoc_seeker;
-extern crate serde;
-extern crate serde_json;
-#[cfg(unix)]
-extern crate signal_hook;
-#[cfg(test)]
-extern crate string_cache;
-extern crate telegram_types;
-extern crate tokio;
-extern crate tokio_timer;
-extern crate unicode_width;
-extern crate url;
-
 mod bot;
 mod bot_runner;
 mod cratesio;
