@@ -1,6 +1,3 @@
-extern crate chrono;
-extern crate git_version;
-
 use chrono::Utc;
 
 fn main() {
