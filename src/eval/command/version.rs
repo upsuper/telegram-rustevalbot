@@ -21,7 +21,7 @@ impl CommandImpl for VersionCommand {
         }
     }
 
-    fn run(ctx: &ExecutionContext, channel: &Option<Channel>, _arg: &str) -> BoxCommandFuture {
+    fn run(ctx: &ExecutionContext<'_>, channel: &Option<Channel>, _arg: &str) -> BoxCommandFuture {
         let url = format!(
             "https://play.rust-lang.org/meta/version/{}",
             channel.unwrap_or(Channel::Stable).as_str(),

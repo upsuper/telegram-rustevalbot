@@ -113,7 +113,7 @@ impl EvalBot {
         }
     }
 
-    fn build_command(id: UpdateId, message: &Message) -> Result<Command, ()> {
+    fn build_command(id: UpdateId, message: &Message) -> Result<Command<'_>, ()> {
         // Don't care about messages not sent from a user.
         let from = match message.from.as_ref() {
             Some(from) => from,

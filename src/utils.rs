@@ -9,7 +9,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 pub enum Void {}
 
 impl fmt::Display for Void {
-    fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
         Ok(())
     }
 }
@@ -28,7 +28,7 @@ pub fn map_reqwest_error(error: &reqwest::Error) -> &'static str {
     }
 }
 
-pub fn truncate_output(output: &str, max_lines: usize, max_total_columns: usize) -> Cow<str> {
+pub fn truncate_output(output: &str, max_lines: usize, max_total_columns: usize) -> Cow<'_, str> {
     let mut line_count = 0;
     let mut column_count = 0;
     for (pos, c) in output.char_indices() {
@@ -104,7 +104,7 @@ mod test {
             input: &'a [(&'a str, usize)],
             expected: &'a [(&'a str, usize)],
         }
-        const TESTCASES: &[Testcase] = &[
+        const TESTCASES: &[Testcase<'_>] = &[
             Testcase {
                 input: &[("a", 300)],
                 expected: &[("a", 213), ("...", 1)],

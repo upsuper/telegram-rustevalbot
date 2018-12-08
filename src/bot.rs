@@ -64,7 +64,7 @@ impl Bot {
         &self,
         chat_id: ChatId,
         text: impl Into<Cow<'a, str>>,
-    ) -> BotRequest<Message> {
+    ) -> BotRequest<'_, Message> {
         let mut send_message =
             SendMessage::new(ChatTarget::id(chat_id.0), text).parse_mode(ParseMode::HTML);
         send_message.disable_web_page_preview = Some(true);
@@ -76,14 +76,14 @@ impl Bot {
         chat_id: ChatId,
         message_id: MessageId,
         text: impl Into<Cow<'a, str>>,
-    ) -> BotRequest<Message> {
+    ) -> BotRequest<'_, Message> {
         let edit_message = EditMessageText::new(ChatTarget::id(chat_id.0), message_id, text)
             .parse_mode(ParseMode::HTML)
             .disable_preview();
         self.build_request(&edit_message)
     }
 
-    pub fn delete_message(&self, chat_id: ChatId, message_id: MessageId) -> BotRequest<bool> {
+    pub fn delete_message(&self, chat_id: ChatId, message_id: MessageId) -> BotRequest<'_, bool> {
         let delete_message = DeleteMessage {
             chat_id: ChatTarget::id(chat_id.0),
             message_id,
@@ -94,8 +94,8 @@ impl Bot {
     pub fn answer_inline_query(
         &self,
         inline_query_id: InlineQueryId,
-        results: &[InlineQueryResult],
-    ) -> BotRequest<bool> {
+        results: &[InlineQueryResult<'_>],
+    ) -> BotRequest<'_, bool> {
         let answer = AnswerInlineQuery {
             inline_query_id,
             results: results.into(),

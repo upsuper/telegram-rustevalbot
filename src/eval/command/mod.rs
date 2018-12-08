@@ -48,7 +48,7 @@ impl Executor {
     ///
     /// Future resolves to a message to send back. If nothing can be
     /// replied, it rejects.
-    pub fn execute(&self, cmd: &Command) -> Option<BoxFutureStr> {
+    pub fn execute(&self, cmd: &Command<'_>) -> Option<BoxFutureStr> {
         if let Some(info) = self.parse_command(cmd.command) {
             let context = ExecutionContext {
                 client: &self.client,
@@ -110,7 +110,7 @@ trait CommandImpl {
 
     // XXX Trait functions cannot return `impl Trait`.
     // Hopefully in the future we can use `async fn` here.
-    fn run(ctx: &ExecutionContext, flags: &Self::Flags, arg: &str) -> BoxCommandFuture;
+    fn run(ctx: &ExecutionContext<'_>, flags: &Self::Flags, arg: &str) -> BoxCommandFuture;
 }
 
 macro_rules! impl_command_methods {
@@ -167,7 +167,7 @@ macro_rules! commands {
 
         fn execute_command_with_name(
             name: &str,
-            ctx: &ExecutionContext,
+            ctx: &ExecutionContext<'_>,
             args: &str,
         ) -> Option<BoxFutureStr> {
             macro_rules! execute {
@@ -203,7 +203,7 @@ struct FlagsBuilder<Impl: CommandImpl> {
 }
 
 impl<Impl: CommandImpl> Debug for FlagsBuilder<Impl> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         f.write_str("FlagsBuilder(")?;
         if self.error {
             f.write_str("error")?;
@@ -250,7 +250,7 @@ enum CommandParseResult<'a, Flags> {
     Error,
 }
 
-fn parse_command_flags<Impl: CommandImpl>(args: &str) -> CommandParseResult<Impl::Flags> {
+fn parse_command_flags<Impl: CommandImpl>(args: &str) -> CommandParseResult<'_, Impl::Flags> {
     use combine::parser::{
         char::{alpha_num, spaces, string},
         range::recognize,
@@ -275,7 +275,7 @@ fn parse_command_flags<Impl: CommandImpl>(args: &str) -> CommandParseResult<Impl
     }
 }
 
-fn execute_command<Impl: CommandImpl>(ctx: &ExecutionContext, args: &str) -> BoxFutureStr {
+fn execute_command<Impl: CommandImpl>(ctx: &ExecutionContext<'_>, args: &str) -> BoxFutureStr {
     let (flags, remaining) = match parse_command_flags::<Impl>(args) {
         CommandParseResult::Normal(flags, remaining) => (flags, remaining),
         CommandParseResult::Help => return str_to_box_future(Impl::help()),
@@ -310,12 +310,12 @@ mod tests {
             false
         }
 
-        fn run(_ctx: &ExecutionContext, _flags: &Self::Flags, _arg: &str) -> BoxCommandFuture {
+        fn run(_ctx: &ExecutionContext<'_>, _flags: &Self::Flags, _arg: &str) -> BoxCommandFuture {
             unreachable!()
         }
     }
 
-    fn parse(arg: &str) -> CommandParseResult<Vec<&'static str>> {
+    fn parse(arg: &str) -> CommandParseResult<'_, Vec<&'static str>> {
         parse_command_flags::<TestCommand>(arg)
     }
 

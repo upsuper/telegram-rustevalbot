@@ -40,7 +40,7 @@ pub struct DocCommand;
 impl CommandImpl for DocCommand {
     type Flags = ();
 
-    fn run(ctx: &ExecutionContext, _flags: &(), arg: &str) -> BoxCommandFuture {
+    fn run(ctx: &ExecutionContext<'_>, _flags: &(), arg: &str) -> BoxCommandFuture {
         let path = arg
             .split("::")
             .map(|s| s.trim_matches(char::is_whitespace))

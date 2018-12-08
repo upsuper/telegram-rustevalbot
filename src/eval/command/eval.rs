@@ -60,7 +60,7 @@ impl CommandImpl for EvalCommand {
         }
     }
 
-    fn run(ctx: &ExecutionContext, flags: &Flags, arg: &str) -> BoxCommandFuture {
+    fn run(ctx: &ExecutionContext<'_>, flags: &Flags, arg: &str) -> BoxCommandFuture {
         let is_private = ctx.is_private;
         let code = if flags.bare {
             arg.to_string()
@@ -144,7 +144,7 @@ impl CommandImpl for EvalCommand {
                 }
                 if let Some(line) = return_line {
                     let line = encode_minimal(line);
-                    let line = RE_ERROR.replacen(&line, 1, |captures: &Captures| {
+                    let line = RE_ERROR.replacen(&line, 1, |captures: &Captures<'_>| {
                         let err_num = captures.get(1).unwrap().as_str();
                         let url = format!(
                             "https://doc.rust-lang.org/{}/error-index.html#{}",
@@ -157,10 +157,10 @@ impl CommandImpl for EvalCommand {
                             err_num,
                         )
                     });
-                    let line = RE_CODE.replace_all(&line, |captures: &Captures| {
+                    let line = RE_CODE.replace_all(&line, |captures: &Captures<'_>| {
                         format!("<code>{}</code>", captures.get(1).unwrap().as_str())
                     });
-                    let line = RE_ISSUE.replacen(&line, 1, |captures: &Captures| {
+                    let line = RE_ISSUE.replacen(&line, 1, |captures: &Captures<'_>| {
                         let issue_num = captures.get(1).unwrap().as_str();
                         let url = format!("https://github.com/rust-lang/rust/issues/{}", issue_num);
                         format!(r#"(see issue <a href="{}">#{}</a>)"#, url, issue_num)
