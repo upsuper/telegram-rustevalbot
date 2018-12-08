@@ -1,3 +1,5 @@
+#![recursion_limit="128"]
+
 mod bot;
 mod bot_runner;
 mod cratesio;
