@@ -96,7 +96,7 @@ impl CommandImpl for EvalCommand {
         let channel = flags.channel.unwrap_or(Channel::Stable);
         let req = Request {
             channel,
-            edition: flags.edition,
+            edition: flags.edition.unwrap_or("2018"),
             mode: flags.mode.unwrap_or(Mode::Debug),
             crate_type: CrateType::Bin,
             tests: false,
@@ -179,8 +179,7 @@ impl CommandImpl for EvalCommand {
 #[serde(rename_all = "camelCase")]
 struct Request {
     channel: Channel,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    edition: Option<&'static str>,
+    edition: &'static str,
     mode: Mode,
     crate_type: CrateType,
     tests: bool,
