@@ -184,8 +184,8 @@ impl From<TimerError> for Error {
 }
 
 pub struct ParseError {
-    data: Vec<u8>,
-    error: serde_json::Error,
+    pub data: Vec<u8>,
+    pub error: serde_json::Error,
 }
 
 impl fmt::Debug for ParseError {

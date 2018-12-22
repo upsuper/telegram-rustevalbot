@@ -1,4 +1,4 @@
-use crate::bot::{Bot, UpdateStream};
+use crate::bot::{Bot, Error, UpdateStream};
 use crate::shutdown::Shutdown;
 use crate::utils;
 use futures::future::Either;
@@ -19,6 +19,7 @@ pub fn run<Impl, Creator, Handler, HandleResult>(
     shutdown: Arc<Shutdown>,
     create_impl: Creator,
     handle_update: Handler,
+    report_error: fn(&Bot, &Error),
 ) -> (
     impl Future<Item = (), Error = ()> + Send,
     Receiver<Result<Option<Bot>, ()>>,
@@ -54,6 +55,7 @@ where
             retried: 0,
             delay: None,
             shutdown,
+            report_error,
         });
     (Either::B(future), receiver)
 }
@@ -65,6 +67,7 @@ struct BotRun<Impl, Handler> {
     retried: usize,
     delay: Option<Delay>,
     shutdown: Arc<Shutdown>,
+    report_error: fn(&Bot, &Error),
 }
 
 impl<Impl, Handler> Future for BotRun<Impl, Handler>
@@ -104,6 +107,7 @@ where
                     }
                 }
                 Err(e) => {
+                    self.report_error(&e);
                     warn!("({}) telegram error: {:?}", self.retried, e);
                     if self.retried >= 13 {
                         error!("retried too many times!");
@@ -186,5 +190,10 @@ impl<Impl, Handler> BotRun<Impl, Handler> {
             _ => return false,
         }
         true
+    }
+
+    fn report_error(&self, error: &Error) {
+        let bot = self.stream.bot();
+        (self.report_error)(bot, error);
     }
 }

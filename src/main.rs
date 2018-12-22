@@ -10,7 +10,7 @@ mod signal;
 mod upgrade;
 mod utils;
 
-use crate::bot::Bot;
+use crate::bot::{Bot, Error};
 use crate::cratesio::CratesioBot;
 use crate::eval::EvalBot;
 use crate::shutdown::Shutdown;
@@ -81,6 +81,7 @@ fn main() {
         shutdown.clone(),
         move |bot| EvalBot::new(client_clone, bot),
         EvalBot::handle_update,
+        report_error_to_admin,
     );
     runtime.spawn(eval_future);
 
@@ -93,20 +94,13 @@ fn main() {
         shutdown.clone(),
         move |bot| CratesioBot::new(client_clone, bot),
         CratesioBot::handle_update,
+        report_error_to_admin,
     );
     runtime.spawn(cratesio_future);
 
     // Drop the client otherwise shutdown_on_idle below may be blocked
     // by its connection pool.
     drop(client);
-
-    fn send_message_to_admin(bot: &Bot, msg: String) -> impl Future<Item = (), Error = ()> {
-        let chat_id = ChatId(ADMIN_ID.0);
-        bot.send_message(chat_id, msg)
-            .execute()
-            .map(|_| ())
-            .map_err(|e| error!("failed to send message to admin: {:?}", e))
-    }
 
     fn bind_name(
         receiver: Receiver<Result<Option<Bot>, ()>>,
@@ -186,4 +180,27 @@ fn build_client() -> Client {
     let mut headers = HeaderMap::new();
     headers.insert(USER_AGENT, crate::USER_AGENT.parse().unwrap());
     Client::builder().default_headers(headers).build().unwrap()
+}
+
+fn report_error_to_admin(bot: &Bot, error: &Error) {
+    use htmlescape::encode_minimal;
+    let message = match error {
+        Error::Parse(bot::ParseError { data, error }) => {
+            format!(
+                "parse failed: {:?}\n<pre>{}</pre>",
+                encode_minimal(&format!("{:?}", error)),
+                encode_minimal(&String::from_utf8_lossy(data)),
+            )
+        }
+        _ => encode_minimal(&format!("{:?}", error)),
+    };
+    tokio::spawn(send_message_to_admin(bot, message));
+}
+
+fn send_message_to_admin(bot: &Bot, msg: String) -> impl Future<Item = (), Error = ()> {
+    let chat_id = ChatId(ADMIN_ID.0);
+    bot.send_message(chat_id, msg)
+        .execute()
+        .map(|_| ())
+        .map_err(|e| error!("failed to send message to admin: {:?}", e))
 }
