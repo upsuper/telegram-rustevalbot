@@ -144,15 +144,15 @@ where
             .execute(req)
             .and_then(|resp| resp.into_body().concat2())
             .map_err(Error::from)
-            .and_then(|data| {
-                match serde_json::from_slice::<TelegramResult<T>>(&data) {
+            .and_then(
+                |data| match serde_json::from_slice::<TelegramResult<T>>(&data) {
                     Ok(result) => Ok(Into::<Result<_, _>>::into(result)?),
                     Err(error) => Err(Error::Parse(ParseError {
                         data: data.into_iter().collect(),
                         error,
                     })),
-                }
-            });
+                },
+            );
         Either::A(future)
     }
 }
