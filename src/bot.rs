@@ -5,8 +5,10 @@ use log::debug;
 use reqwest;
 use reqwest::r#async::{Client, Request};
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use std::borrow::Cow;
 use std::collections::VecDeque;
+use std::fmt;
 use std::marker::PhantomData;
 use std::time::Duration;
 use telegram_types::bot::inline_mode::{AnswerInlineQuery, InlineQueryId, InlineQueryResult};
@@ -140,9 +142,17 @@ where
         let future = self
             .client
             .execute(req)
-            .and_then(|mut resp| resp.json())
+            .and_then(|resp| resp.into_body().concat2())
             .map_err(Error::from)
-            .and_then(|result: TelegramResult<T>| Ok(Into::<Result<_, _>>::into(result)?));
+            .and_then(|data| {
+                match serde_json::from_slice::<TelegramResult<T>>(&data) {
+                    Ok(result) => Ok(Into::<Result<_, _>>::into(result)?),
+                    Err(error) => Err(Error::Parse(ParseError {
+                        data: data.into_iter().collect(),
+                        error,
+                    })),
+                }
+            });
         Either::A(future)
     }
 }
@@ -152,6 +162,7 @@ pub enum Error {
     Request(reqwest::Error),
     Api(ApiError),
     Timer(TimerError),
+    Parse(ParseError),
 }
 
 impl From<reqwest::Error> for Error {
@@ -169,6 +180,17 @@ impl From<ApiError> for Error {
 impl From<TimerError> for Error {
     fn from(err: TimerError) -> Self {
         Error::Timer(err)
+    }
+}
+
+pub struct ParseError {
+    data: Vec<u8>,
+    error: serde_json::Error,
+}
+
+impl fmt::Debug for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "ParseError: {}", self.error)
     }
 }
 
@@ -219,7 +241,7 @@ impl Stream for UpdateStream {
             match request.poll() {
                 Ok(Async::Ready(updates)) => {
                     if let Some(last_update) = updates.last() {
-                        self.update_id = Some(UpdateId(last_update.update_id.0 + 1));
+                        self.bump_update_id(last_update.update_id);
                     }
                     self.buffer = VecDeque::from(updates);
                 }
@@ -229,7 +251,9 @@ impl Stream for UpdateStream {
                 }
                 Err(err) => {
                     if err.is_inner() {
-                        break Err(err.into_inner().unwrap());
+                        let error = err.into_inner().unwrap();
+                        self.may_recover_from_error(&error);
+                        break Err(error);
                     }
                     if err.is_timer() {
                         break Err(err.into_timer().unwrap().into());
@@ -239,5 +263,39 @@ impl Stream for UpdateStream {
                 }
             }
         }
+    }
+}
+
+impl UpdateStream {
+    fn bump_update_id(&mut self, update_id: UpdateId) {
+        self.update_id = Some(UpdateId(update_id.0 + 1));
+    }
+
+    fn may_recover_from_error(&mut self, error: &Error) {
+        // XXX We should be able to simplify this function once if-let-chain
+        // gets stable. See RFC 2497.
+        let data = match error {
+            Error::Parse(ParseError { data, .. }) => data,
+            _ => return,
+        };
+        let value = match serde_json::from_slice::<JsonValue>(&data) {
+            Ok(value) => value,
+            Err(_) => return,
+        };
+        let map = match value {
+            JsonValue::Object(map) => map,
+            _ => return,
+        };
+        let ok = map.get("ok").and_then(|v| v.as_bool());
+        if !ok.unwrap_or(false) {
+            return;
+        }
+        map.get("result")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.last())
+            .and_then(|item| item.as_object())
+            .and_then(|map| map.get("update_id"))
+            .and_then(|v| v.as_i64())
+            .map(|v| self.bump_update_id(UpdateId(v)));
     }
 }
