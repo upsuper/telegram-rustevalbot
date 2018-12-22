@@ -1,3 +1,4 @@
+use derive_more::From;
 use futures::future::Either;
 use futures::sync::oneshot::Receiver;
 use futures::{Async, Future, IntoFuture, Poll, Stream};
@@ -157,30 +158,12 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, From)]
 pub enum Error {
     Request(reqwest::Error),
     Api(ApiError),
     Timer(TimerError),
     Parse(ParseError),
-}
-
-impl From<reqwest::Error> for Error {
-    fn from(err: reqwest::Error) -> Self {
-        Error::Request(err)
-    }
-}
-
-impl From<ApiError> for Error {
-    fn from(err: ApiError) -> Self {
-        Error::Api(err)
-    }
-}
-
-impl From<TimerError> for Error {
-    fn from(err: TimerError) -> Self {
-        Error::Timer(err)
-    }
 }
 
 pub struct ParseError {
