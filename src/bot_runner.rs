@@ -93,16 +93,20 @@ where
 
             match self.stream.poll() {
                 Ok(result) => {
-                    self.retried = 0;
                     match result {
                         Async::NotReady => break Ok(Async::NotReady),
-                        Async::Ready(None) => {
-                            break Ok(Async::Ready(()));
-                        }
-                        Async::Ready(Some(update)) => {
-                            self.handle_update(update);
-                            // Go through the loop again to ensure that
-                            // we don't get stuck.
+                        Async::Ready(resp) => {
+                            self.retried = 0;
+                            match resp {
+                                Some(update) => {
+                                    self.handle_update(update);
+                                    // Go through the loop again to ensure that
+                                    // we don't get stuck.
+                                }
+                                None => {
+                                    break Ok(Async::Ready(()));
+                                }
+                            }
                         }
                     }
                 }
