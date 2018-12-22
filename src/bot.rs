@@ -290,12 +290,14 @@ impl UpdateStream {
         if !ok.unwrap_or(false) {
             return;
         }
-        map.get("result")
+        let update_id = map.get("result")
             .and_then(|v| v.as_array())
             .and_then(|arr| arr.last())
             .and_then(|item| item.as_object())
             .and_then(|map| map.get("update_id"))
-            .and_then(|v| v.as_i64())
-            .map(|v| self.bump_update_id(UpdateId(v)));
+            .and_then(|v| v.as_i64());
+        if let Some(update_id) = update_id {
+            self.bump_update_id(UpdateId(update_id));
+        }
     }
 }
