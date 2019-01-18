@@ -273,7 +273,8 @@ impl UpdateStream {
         if !ok.unwrap_or(false) {
             return;
         }
-        let update_id = map.get("result")
+        let update_id = map
+            .get("result")
             .and_then(|v| v.as_array())
             .and_then(|arr| arr.last())
             .and_then(|item| item.as_object())
