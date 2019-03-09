@@ -10,7 +10,7 @@ edition = "2018"
 combine = "3.6.0"
 dotenv = { version = "0.13.0", default-features = false }
 env_logger = "0.6.0"
-derive_more = "0.13.0"
+derive_more = "0.14.0"
 fst = "0.3"
 fst-subseq-ascii-caseless = "0.1"
 futures = "0.1"
