@@ -12,8 +12,6 @@ use telegram_types::bot::types::{Message, Update, UpdateContent, UpdateId};
 mod command;
 mod record;
 
-pub use self::command::init;
-
 /// Eval bot.
 pub struct EvalBot {
     bot: Bot,

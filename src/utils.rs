@@ -1,9 +1,10 @@
+use htmlescape::encode_minimal;
 use matches::matches;
 use reqwest;
 use std::borrow::Cow;
 use std::fmt;
 use telegram_types::bot::types::{ChatType, Message};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Void {}
@@ -52,33 +53,22 @@ pub fn truncate_output(output: &str, max_lines: usize, max_total_columns: usize)
     output.into()
 }
 
-/// A `Write` type which counts the total width written into the inner.
-pub struct WidthCountingWriter<W: fmt::Write> {
-    inner: W,
-    width: usize,
-}
-
-impl<W: fmt::Write> WidthCountingWriter<W> {
-    /// Create a `WidthCountWriter` with an inner `Write`.
-    pub fn new(inner: W) -> Self {
-        WidthCountingWriter { inner, width: 0 }
-    }
-
-    /// Get the total unicode char width written into inner.
-    pub fn total_width(&self) -> usize {
-        self.width
-    }
-}
-
-impl<W: fmt::Write> fmt::Write for WidthCountingWriter<W> {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.width += s.width_cjk();
-        self.inner.write_str(s)
-    }
-}
-
 pub fn is_message_from_private_chat(message: &Message) -> bool {
     matches!(message.chat.kind, ChatType::Private { .. })
+}
+
+pub fn encode_with_code(output: &mut String, text: &str) {
+    let mut is_code = false;
+    for chunk in encode_minimal(text).split('`') {
+        if !is_code {
+            output.push_str(chunk);
+        } else {
+            output.push_str("<code>");
+            output.push_str(chunk);
+            output.push_str("</code>");
+        }
+        is_code = !is_code;
+    }
 }
 
 #[cfg(test)]

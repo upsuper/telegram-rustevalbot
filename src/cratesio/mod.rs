@@ -1,4 +1,5 @@
 use crate::bot::Bot;
+use crate::utils::encode_with_code;
 use futures::future::Either;
 use futures::{Future, IntoFuture};
 use htmlescape::encode_minimal;
@@ -117,17 +118,7 @@ impl Crate {
         );
         if let Some(description) = &description {
             message.push('\n');
-            let mut is_code = false;
-            for chunk in encode_minimal(description).split('`') {
-                if !is_code {
-                    message.push_str(chunk);
-                } else {
-                    message.push_str("<code>");
-                    message.push_str(chunk);
-                    message.push_str("</code>");
-                }
-                is_code = !is_code;
-            }
+            encode_with_code(&mut message, description);
         }
 
         let name_url = encode_for_url(&self.name);

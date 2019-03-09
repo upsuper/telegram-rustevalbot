@@ -136,11 +136,8 @@ macro_rules! impl_command_methods {
     }
 }
 
-mod doc;
 mod eval;
 mod version;
-
-pub use self::doc::init;
 
 macro_rules! commands {
     {
@@ -187,7 +184,6 @@ macro_rules! commands {
 
 commands! {
     general: [
-        "/doc" => doc::DocCommand: "query document of Rust's standard library",
         "/eval" => eval::EvalCommand: "evaluate a piece of Rust code",
         "/rustc_version" => version::VersionCommand: "display rustc version being used",
     ];

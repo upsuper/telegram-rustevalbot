@@ -4,6 +4,7 @@ mod bot;
 mod bot_runner;
 mod cratesio;
 mod eval;
+mod rustdoc;
 mod shutdown;
 #[cfg(unix)]
 mod signal;
@@ -13,6 +14,7 @@ mod utils;
 use crate::bot::{Bot, Error};
 use crate::cratesio::CratesioBot;
 use crate::eval::EvalBot;
+use crate::rustdoc::RustdocBot;
 use crate::shutdown::Shutdown;
 use futures::future::join_all;
 use futures::sync::oneshot::Receiver;
@@ -65,7 +67,7 @@ fn main() {
     #[cfg(unix)]
     signal::init(shutdown.clone());
     upgrade::init(shutdown.clone());
-    eval::init();
+    rustdoc::init();
 
     info!("Running as `{}`", USER_AGENT);
 
@@ -98,6 +100,18 @@ fn main() {
     );
     runtime.spawn(cratesio_future);
 
+    // Kick off rustdoc bot.
+    let (rustdoc_future, rustdoc_receiver) = bot_runner::run(
+        "rustdoc",
+        "RUSTDOC_TELEGRAM_TOKEN",
+        &client,
+        shutdown.clone(),
+        RustdocBot::new,
+        RustdocBot::handle_update,
+        report_error_to_admin,
+    );
+    runtime.spawn(rustdoc_future);
+
     // Drop the client otherwise shutdown_on_idle below may be blocked
     // by its connection pool.
     drop(client);
@@ -114,6 +128,7 @@ fn main() {
     let (bot, start_msg) = join_all(vec![
         bind_name(eval_receiver, "eval"),
         bind_name(cratesio_receiver, "cratesio"),
+        bind_name(rustdoc_receiver, "rustdoc"),
     ])
     .map(|bots| {
         let bots = bots.into_iter().filter_map(|info| info).collect_vec();

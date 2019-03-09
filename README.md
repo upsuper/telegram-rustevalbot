@@ -45,11 +45,6 @@ For convenience, inner attributes and `extern crate`s
 at the beginning of code are moved to the beginning of the wrapped code
 when `--bare` is not used.
 
-#### Document query
-
-Eval can can display document item from official document
-via `/doc <query>` command, e.g. `/crate hashmap`.
-
 #### Other commands
 
 You can use `/help` command when talking to it directly to query other
@@ -67,6 +62,18 @@ The official instance of this bot is [@cratesiobot](https://t.me/cratesiobot).
 It can be used everywhere with a message in format `@cratesiobot <crate>`.
 Telegram would should a menu for user to select crate from.
 
+## Rust doc bot
+
+This is a Telegram bot running under inline mode
+for helping people find and send details of items in Rust official document.
+
+The official instance of this bot is [@rustdocbot](https://t.me/rustdocbot).
+
+It can be used everywhere with a message in format `@rustdocbot <crate>`.
+Telegram would should a menu for user to select item from.
+
+This replaces the `/doc` command previously available in the Eval bot.
+
 ## Configuration
 
 This bot program uses environment variable for config,
@@ -75,6 +82,7 @@ and also recognize `.env` file in the working directory.
 Bot tokens can be specified via:
 * `EVAL_TELEGRAM_TOKEN`: the Eval bot
 * `CRATESIO_TELEGRAM_TOKEN`: the Crates.io bot
+* `RUSTDOC_TELEGRAM_TOKEN`: the Rust doc bot
 
 At least one of the tokens must be provided.
 The bot tokens can be created with [@BotFather](https://t.me/BotFather).
