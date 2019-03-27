@@ -75,7 +75,7 @@ impl CommandImpl for EvalCommand {
                         // Template below would provide the indent of this line.
                         "println!(\"{{:?}}\", {{",
                         "        {code}",
-                        "    }});",
+                        "    }})",
                     },
                     code = body
                 ))
@@ -86,7 +86,7 @@ impl CommandImpl for EvalCommand {
                     "{header}",
                     "",
                     "fn main() {{",
-                    "    {code}",
+                    "    {code};",
                     "}}",
                 },
                 header = header,
