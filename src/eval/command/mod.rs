@@ -10,8 +10,6 @@ use telegram_types::bot::types::UpdateId;
 pub struct Executor {
     /// Reqwest client
     client: Client,
-    /// Telegram username of the bot
-    username: &'static str,
 }
 
 pub struct Command<'a> {
@@ -27,21 +25,19 @@ pub struct Command<'a> {
 struct CommandInfo<'a> {
     name: &'a str,
     args: &'a str,
-    at_self: bool,
 }
 
 struct ExecutionContext<'a> {
     client: &'a Client,
     is_private: bool,
-    is_specific: bool,
 }
 
 type BoxFutureStr = Box<dyn Future<Item = Cow<'static, str>, Error = Void> + Send>;
 
 impl Executor {
     /// Create new command executor.
-    pub fn new(client: Client, username: &'static str) -> Self {
-        Executor { client, username }
+    pub fn new(client: Client) -> Self {
+        Executor { client }
     }
 
     /// Execute a command.
@@ -53,7 +49,6 @@ impl Executor {
             let context = ExecutionContext {
                 client: &self.client,
                 is_private: cmd.is_private,
-                is_specific: cmd.is_private || info.at_self,
             };
             if let Some(result) = execute_command_with_name(info.name, &context, info.args) {
                 return Some(result);
@@ -64,7 +59,7 @@ impl Executor {
 
     fn parse_command<'s>(&self, s: &'s str) -> Option<CommandInfo<'s>> {
         use combine::parser::{
-            char::{alpha_num, spaces, string},
+            char::{alpha_num, spaces},
             choice::optional,
             item::{any, eof, item},
             range::recognize,
@@ -73,14 +68,12 @@ impl Executor {
         };
         (
             recognize((item('/'), skip_many1(alpha_num()))),
-            optional((item('@'), string(&self.username))),
             optional((spaces(), recognize(skip_many(any())))),
             eof(),
         )
-            .map(|(name, at_self, args, _)| CommandInfo {
+            .map(|(name, args, _)| CommandInfo {
                 name,
                 args: args.map(|(_, s)| s).unwrap_or(""),
-                at_self: at_self.is_some(),
             })
             .parse(s)
             .map(|(ci, _)| ci)
@@ -144,9 +137,6 @@ macro_rules! commands {
         general: [
             $($cmd_g:expr => $ty_g:ty: $desc_g:expr,)+
         ];
-        specific: [
-            $($cmd_s:expr => $ty_s:ty: $desc_s:expr,)+
-        ];
     } => {
         fn execute_command_with_name(
             name: &str,
@@ -158,7 +148,6 @@ macro_rules! commands {
             }
             match name {
                 $($cmd_g => execute!($ty_g),)+
-                $($cmd_s if ctx.is_specific => execute!($ty_s),)+
                 _ => None
             }
         }
@@ -169,9 +158,6 @@ commands! {
     general: [
         "/eval" => eval::EvalCommand: "evaluate a piece of Rust code",
         "/rustc_version" => version::VersionCommand: "display rustc version being used",
-    ];
-    specific: [
-        "/version" => version::VersionCommand: "display rustc version being used",
     ];
 }
 

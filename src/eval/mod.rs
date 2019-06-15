@@ -24,7 +24,7 @@ type BoxFuture = Box<dyn Future<Item = (), Error = ()> + Send>;
 impl EvalBot {
     /// Create new eval bot instance.
     pub fn new(client: Client, bot: Bot) -> Self {
-        let executor = Executor::new(client, bot.username);
+        let executor = Executor::new(client);
         let records = Arc::new(Mutex::new(RecordService::init()));
         info!("EvalBot authorized as @{}", bot.username);
         EvalBot {
