@@ -30,6 +30,9 @@ script:
   - cargo test --release --verbose
   - bash ci/prepare_deploy.sh
 
+after_success:
+  - bash ci/coveralls.sh
+
 before_cache:
   - bash ci/cleanup_for_cache.sh
 
