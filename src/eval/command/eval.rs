@@ -28,6 +28,7 @@ pub struct Flags {
     edition: Option<&'static str>,
     mode: Option<Mode>,
     bare: bool,
+    version: bool,
 }
 
 impl CommandImpl for EvalCommand {
@@ -57,10 +58,30 @@ impl CommandImpl for EvalCommand {
             ("--bare", "don't add any wrapping code") {
                 flags.bare = true;
             }
+            ("--version", "show version instead of running code") {
+                flags.version = true;
+            }
         }
     }
 
     fn run(ctx: &ExecutionContext<'_>, flags: &Flags, arg: &str) -> BoxCommandFuture {
+        if flags.version {
+            let url = format!(
+                "https://play.rust-lang.org/meta/version/{}",
+                flags.channel.unwrap_or(Channel::Stable).as_str(),
+            );
+            let future = ctx
+                .client
+                .get(&url)
+                .send()
+                .and_then(|resp| resp.error_for_status())
+                .and_then(|mut resp| resp.json())
+                .map(|resp: Version| {
+                    format!("rustc {} ({:.9} {})", resp.version, resp.hash, resp.date)
+                })
+                .map_err(|e| utils::map_reqwest_error(&e));
+            return Box::new(future);
+        }
         let is_private = ctx.is_private;
         let code = if flags.bare {
             arg.to_string()
@@ -173,6 +194,13 @@ impl CommandImpl for EvalCommand {
             .map_err(|e| utils::map_reqwest_error(&e));
         Box::new(future)
     }
+}
+
+#[derive(Deserialize)]
+struct Version {
+    date: String,
+    hash: String,
+    version: String,
 }
 
 #[derive(Debug, Serialize)]

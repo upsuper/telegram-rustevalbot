@@ -130,7 +130,6 @@ macro_rules! impl_command_methods {
 }
 
 mod eval;
-mod version;
 
 macro_rules! commands {
     {
@@ -157,7 +156,6 @@ macro_rules! commands {
 commands! {
     general: [
         "/eval" => eval::EvalCommand: "evaluate a piece of Rust code",
-        "/rustc_version" => version::VersionCommand: "display rustc version being used",
     ];
 }
 
