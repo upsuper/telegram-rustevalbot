@@ -1,6 +1,6 @@
 [package]
 name = "telegram-rustevalbot"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Xidorn Quan <me@upsuper.org>"]
 license = "MIT"
 homepage = "https://github.com/upsuper/telegram-rustevalbot"
@@ -36,10 +36,6 @@ url = "1.7.1"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.1.5"
-
-[build-dependencies]
-chrono = "0.4.6"
-git-version = "0.2"
 
 [dev-dependencies]
 string_cache = "0.7"

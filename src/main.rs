@@ -29,14 +29,6 @@ use std::io::Write as IOWrite;
 use telegram_types::bot::types::{ChatId, UserId};
 use tokio::runtime::Runtime;
 
-const VERSION: &str = concat!(
-    env!("CARGO_PKG_VERSION"),
-    " (",
-    env!("VERSION"),
-    " / ",
-    env!("BUILD_DATE"),
-    ")",
-);
 const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",
@@ -53,7 +45,7 @@ lazy_static! {
     static ref ABOUT_MESSAGE: String = format!(
         "{} {}\n{}",
         env!("CARGO_PKG_NAME"),
-        VERSION,
+        env!("VERSION"),
         env!("CARGO_PKG_HOMEPAGE")
     );
 }
@@ -132,7 +124,7 @@ fn main() {
     ])
     .map(|bots| {
         let bots = bots.into_iter().filter_map(|info| info).collect_vec();
-        let mut start_msg = format!("Start version: {}", VERSION);
+        let mut start_msg = format!("Start version: {}", env!("VERSION"));
         for (name, bot) in bots.iter() {
             write!(&mut start_msg, "\nbot {} @{}", name, bot.username).unwrap();
         }
