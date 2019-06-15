@@ -148,20 +148,6 @@ macro_rules! commands {
             $($cmd_s:expr => $ty_s:ty: $desc_s:expr,)+
         ];
     } => {
-        fn display_help(is_private: bool) -> &'static str {
-            if is_private {
-                concat!(
-                    $("<code>", $cmd_g, "</code> - ", $desc_g, "\n",)+
-                    $("<code>", $cmd_s, "</code> - ", $desc_s, "\n",)+
-                    "<code>/help</code> - show this information",
-                )
-            } else {
-                concat!(
-                    $("<code>", $cmd_g, "</code> - ", $desc_g, "\n",)+
-                )
-            }
-        }
-
         fn execute_command_with_name(
             name: &str,
             ctx: &ExecutionContext<'_>,
@@ -173,9 +159,6 @@ macro_rules! commands {
             match name {
                 $($cmd_g => execute!($ty_g),)+
                 $($cmd_s if ctx.is_specific => execute!($ty_s),)+
-                "/help" if ctx.is_specific => {
-                    Some(str_to_box_future(display_help(ctx.is_private)))
-                }
                 _ => None
             }
         }
