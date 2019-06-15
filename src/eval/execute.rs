@@ -204,48 +204,33 @@ struct Response {
 }
 
 fn extract_code_headers(code: &str) -> (&str, &str) {
-    use combine::parser::{
-        char::{alpha_num, space, spaces, string},
-        choice::choice,
-        combinator::{attempt, ignore},
-        item::{item, none_of},
-        range::recognize,
-        repeat::{skip_many, skip_many1},
-        Parser,
-    };
+    use combine::parser::char::{alpha_num, space, spaces, string};
+    use combine::parser::choice::choice;
+    use combine::parser::combinator::{attempt, ignore};
+    use combine::parser::item::{item, none_of};
+    use combine::parser::range::recognize;
+    use combine::parser::repeat::{skip_many, skip_many1};
+    use combine::parser::Parser;
     use std::iter::once;
     let spaces1 = || (space(), spaces());
+    let attr_content = || (item('['), skip_many(none_of(once(']'))), item(']'));
+    let outer_attr = (item('#'), spaces(), attr_content());
+    let inner_attr = (item('#'), spaces(), item('!'), spaces(), attr_content());
+    let extern_crate = (
+        skip_many(outer_attr),
+        spaces(),
+        string("extern"),
+        spaces1(),
+        string("crate"),
+        spaces1(),
+        skip_many1(choice((alpha_num(), item('_')))),
+        spaces(),
+        item(';'),
+    );
     recognize((
         spaces(),
         skip_many((
-            choice((
-                attempt(ignore((
-                    skip_many((
-                        item('#'),
-                        spaces(),
-                        item('['),
-                        skip_many(none_of(once(']'))),
-                        item(']'),
-                        spaces(),
-                    )),
-                    string("extern"),
-                    spaces1(),
-                    string("crate"),
-                    spaces1(),
-                    skip_many1(choice((alpha_num(), item('_')))),
-                    spaces(),
-                    item(';'),
-                ))),
-                attempt(ignore((
-                    item('#'),
-                    spaces(),
-                    item('!'),
-                    spaces(),
-                    item('['),
-                    skip_many(none_of(once(']'))),
-                    item(']'),
-                ))),
-            )),
+            choice((attempt(ignore(extern_crate)), attempt(ignore(inner_attr)))),
             spaces(),
         )),
     ))
