@@ -29,14 +29,6 @@ use std::io::Write as IOWrite;
 use telegram_types::bot::types::{ChatId, UserId};
 use tokio::runtime::Runtime;
 
-const USER_AGENT: &str = concat!(
-    env!("CARGO_PKG_NAME"),
-    "/",
-    env!("CARGO_PKG_VERSION"),
-    " - ",
-    env!("CARGO_PKG_HOMEPAGE"),
-);
-
 lazy_static! {
     static ref ADMIN_ID: UserId = env::var("BOT_ADMIN_ID")
         .ok()
@@ -61,7 +53,7 @@ fn main() {
     upgrade::init(shutdown.clone());
     rustdoc::init();
 
-    info!("Running as `{}`", USER_AGENT);
+    info!("Running as `{}`", env!("USER_AGENT"));
 
     let mut runtime = Runtime::new().unwrap();
     let client = build_client();
@@ -185,7 +177,7 @@ fn init_logger() {
 fn build_client() -> Client {
     use reqwest::header::{HeaderMap, USER_AGENT};
     let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, crate::USER_AGENT.parse().unwrap());
+    headers.insert(USER_AGENT, env!("USER_AGENT").parse().unwrap());
     Client::builder().default_headers(headers).build().unwrap()
 }
 

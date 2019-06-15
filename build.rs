@@ -7,6 +7,12 @@ fn main() {
         env::var("CARGO_PKG_VERSION").unwrap(),
         get_commit_info().unwrap(),
     );
+    println!(
+        "cargo:rustc-env=USER_AGENT={} / {} - {}",
+        env::var("CARGO_PKG_NAME").unwrap(),
+        env::var("CARGO_PKG_VERSION").unwrap(),
+        env::var("CARGO_PKG_HOMEPAGE").unwrap(),
+    );
 }
 
 fn get_commit_info() -> Option<String> {
