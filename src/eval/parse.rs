@@ -1,9 +1,31 @@
+use combine::error::StringStreamError;
+use combine::parser::char::{alpha_num, space, spaces, string};
+use combine::parser::choice::choice;
+use combine::parser::combinator::attempt;
+use combine::parser::item::eof;
+use combine::parser::range::recognize;
+use combine::parser::repeat::{many, skip_many1};
 use combine::parser::Parser;
 use serde::Serialize;
 use std::fmt::Write as _;
 
 pub fn parse_command(command: &str) -> Option<(Flags, &str)> {
-    parser::command().parse(command).ok()
+    let spaces1 = || (space(), spaces()).map(|_| ());
+    let flag_name = recognize(skip_many1(alpha_num()));
+    let flag = (spaces1(), string("--"), flag_name).map(|(_, _, name)| name);
+    let mut parser = (
+        string("/eval"),
+        many::<FlagsBuilder, _>(attempt(flag)),
+        choice((spaces1(), eof())),
+    )
+        .and_then(|(_, builder, _)| {
+            if builder.error {
+                Err(StringStreamError::UnexpectedParse)
+            } else {
+                Ok(builder.flags)
+            }
+        });
+    parser.parse(command).ok()
 }
 
 pub fn get_help_message() -> String {
@@ -19,54 +41,18 @@ pub fn get_help_message() -> String {
     result
 }
 
-mod parser {
-    use super::{Flags, FLAG_INFO};
-    use combine::error::StringStreamError;
-    use combine::parser::char::{alpha_num, space, spaces, string};
-    use combine::parser::choice::choice;
-    use combine::parser::combinator::attempt;
-    use combine::parser::item::eof;
-    use combine::parser::range::recognize;
-    use combine::parser::repeat::{many, skip_many1};
-    use combine::parser::Parser;
+#[derive(Default)]
+struct FlagsBuilder {
+    flags: Flags,
+    error: bool,
+}
 
-    pub(super) fn command<'a>() -> impl Parser<Input = &'a str, Output = Flags> {
-        (
-            string("/eval"),
-            many::<FlagsBuilder, _>(flag()),
-            choice((spaces1(), eof())),
-        )
-            .and_then(|(_, builder, _)| {
-                if builder.error {
-                    Err(StringStreamError::UnexpectedParse)
-                } else {
-                    Ok(builder.flags)
-                }
-            })
-    }
-
-    fn flag<'a>() -> impl Parser<Input = &'a str, Output = &'a str> {
-        attempt((spaces1(), string("--"), recognize(skip_many1(alpha_num()))))
-            .map(|(_, _, name)| name)
-    }
-
-    fn spaces1<'a>() -> impl Parser<Input = &'a str, Output = ()> {
-        (space(), spaces()).map(|_| ())
-    }
-
-    #[derive(Default)]
-    struct FlagsBuilder {
-        flags: Flags,
-        error: bool,
-    }
-
-    impl<'a> Extend<&'a str> for FlagsBuilder {
-        fn extend<T: IntoIterator<Item = &'a str>>(&mut self, iter: T) {
-            for name in iter {
-                match FLAG_INFO.iter().find(|info| info.name == name) {
-                    Some(info) => (info.setter)(&mut self.flags),
-                    None => self.error = true,
-                }
+impl<'a> Extend<&'a str> for FlagsBuilder {
+    fn extend<T: IntoIterator<Item = &'a str>>(&mut self, iter: T) {
+        for name in iter {
+            match FLAG_INFO.iter().find(|info| info.name == name) {
+                Some(info) => (info.setter)(&mut self.flags),
+                None => self.error = true,
             }
         }
     }
