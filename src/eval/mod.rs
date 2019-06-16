@@ -53,20 +53,32 @@ impl EvalBot {
         self.records
             .lock()
             .push_record(msg_id, message.date.clone());
-        let chat_id = message.chat.id;
         let bot = self.bot.clone();
+        let chat_id = message.chat.id;
+
+        // Send the placeholder reply.
         let records = self.records.clone();
-        Box::new(future.then(move |reply| {
-            let reply = generate_reply(reply);
+        let placeholder_future = bot
+            .send_message(chat_id, "<em>Processing...</em>")
+            .execute()
+            .map(move |msg| {
+                let reply_id = msg.message_id;
+                debug!("{}> placeholder sent as {}", id.0, reply_id.0);
+                records.lock().set_reply(msg_id, reply_id);
+                reply_id
+            })
+            .map_err(move |err| warn!("{}> error: {:?}", id.0, err));
+
+        // Update the reply to the real result.
+        let future = future
+            .then(|reply| Ok(generate_reply(reply)))
+            .join(placeholder_future);
+        Box::new(future.and_then(move |(reply, reply_id)| {
             let reply = reply.trim_matches(char::is_whitespace);
-            debug!("{}> sending: {:?}", id.0, reply);
-            bot.send_message(chat_id, reply)
+            debug!("{}> updating reply: {:?}", id.0, reply);
+            bot.edit_message(chat_id, reply_id, reply)
                 .execute()
-                .map(move |msg| {
-                    let reply_id = msg.message_id;
-                    debug!("{}> sent as {}", id.0, reply_id.0);
-                    records.lock().set_reply(msg_id, reply_id);
-                })
+                .map(move |_| debug!("{}> reply sent", id.0))
                 .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
         }))
     }
@@ -79,26 +91,40 @@ impl EvalBot {
         };
         let chat_id = message.chat.id;
         let bot = self.bot.clone();
-        let records = self.records.clone();
-        match self.prepare_command(id, message) {
-            Some(future) => Box::new(future.then(move |reply| {
-                let reply = generate_reply(reply);
-                let reply = reply.trim_matches(char::is_whitespace);
-                debug!("{}> updating: {:?}", id.0, reply);
-                bot.edit_message(chat_id, reply_id, reply)
-                    .execute()
-                    .map(move |_| debug!("{}> updated", id.0))
-                    .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
-            })),
-            None => Box::new({
+        let future = match self.prepare_command(id, message) {
+            Some(future) => future,
+            None => {
+                // Delete reply if the new command is invalid.
                 debug!("{}> deleting", id.0);
-                records.lock().remove_reply(msg_id);
-                bot.delete_message(chat_id, reply_id)
-                    .execute()
-                    .map(move |_| debug!("{}> deleted", id.0))
-                    .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
-            }),
-        }
+                self.records.lock().remove_reply(msg_id);
+                return Box::new(
+                    bot.delete_message(chat_id, reply_id)
+                        .execute()
+                        .map(move |_| debug!("{}> deleted", id.0))
+                        .map_err(move |err| warn!("{}> error: {:?}", id.0, err)),
+                );
+            }
+        };
+
+        // Update the reply with a placeholder.
+        let placeholder_future = bot
+            .edit_message(chat_id, reply_id, "<em>Updating...</em>")
+            .execute()
+            .map(move |_| debug!("{}> placeholder updated", id.0))
+            .map_err(move |err| warn!("{}> error: {:?}", id.0, err));
+
+        // Update the reply to the real result.
+        let future = future
+            .then(|reply| Ok(generate_reply(reply)))
+            .join(placeholder_future);
+        Box::new(future.and_then(move |(reply, _)| {
+            let reply = reply.trim_matches(char::is_whitespace);
+            debug!("{}> updating: {:?}", id.0, reply);
+            bot.edit_message(chat_id, reply_id, reply)
+                .execute()
+                .map(move |_| debug!("{}> updated", id.0))
+                .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
+        }))
     }
 
     fn prepare_command(
