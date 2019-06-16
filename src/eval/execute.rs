@@ -143,6 +143,7 @@ fn generate_result_from_response(resp: Response, channel: Channel, is_private: b
         if line.starts_with("Compiling")
             || line.starts_with("Finished")
             || line.starts_with("Running")
+            || line.is_empty()
         {
             continue;
         }

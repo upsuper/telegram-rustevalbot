@@ -1,6 +1,6 @@
 [package]
 name = "telegram-rustevalbot"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Xidorn Quan <me@upsuper.org>"]
 license = "MIT"
 homepage = "https://github.com/upsuper/telegram-rustevalbot"
