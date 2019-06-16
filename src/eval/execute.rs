@@ -51,12 +51,6 @@ struct Version {
     version: String,
 }
 
-lazy_static! {
-    static ref RE_ERROR: Regex = Regex::new(r"^error\[(E\d{4})\]:").unwrap();
-    static ref RE_CODE: Regex = Regex::new(r"`(.+?)`").unwrap();
-    static ref RE_ISSUE: Regex = Regex::new(r"\(see issue #(\d+)\)").unwrap();
-}
-
 fn run_code(
     client: &Client,
     code: &str,
@@ -136,6 +130,12 @@ fn generate_result_from_response(resp: Response, channel: Channel, is_private: b
             return "(no output)".to_string();
         }
         return format!("<pre>{}</pre>", encode_minimal(&output));
+    }
+
+    lazy_static! {
+        static ref RE_ERROR: Regex = Regex::new(r"^error\[(E\d{4})\]:").unwrap();
+        static ref RE_CODE: Regex = Regex::new(r"`(.+?)`").unwrap();
+        static ref RE_ISSUE: Regex = Regex::new(r"\(see issue #(\d+)\)").unwrap();
     }
     let mut return_line: Option<&str> = None;
     for line in resp.stderr.split('\n') {
