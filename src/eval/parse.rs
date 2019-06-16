@@ -13,12 +13,10 @@ pub fn parse_command(command: &str) -> Option<(Flags, &str)> {
     let spaces1 = || (space(), spaces()).map(|_| ());
     let flag_name = recognize(skip_many1(alpha_num()));
     let flag = (spaces1(), string("--"), flag_name).map(|(_, _, name)| name);
-    let mut parser = (
-        string("/eval"),
-        many::<FlagsBuilder, _>(attempt(flag)),
-        choice((spaces1(), eof())),
-    )
-        .and_then(|(_, builder, _)| {
+    let mut parser = string("/eval")
+        .with(many::<FlagsBuilder, _>(attempt(flag)))
+        .skip(choice((spaces1(), eof())))
+        .and_then(|builder| {
             if builder.error {
                 Err(StringStreamError::UnexpectedParse)
             } else {

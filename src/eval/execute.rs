@@ -227,15 +227,14 @@ fn extract_code_headers(code: &str) -> (&str, &str) {
         spaces(),
         item(';'),
     );
-    recognize((
+    let mut header = recognize((
         spaces(),
         skip_many((
             choice((attempt(ignore(extern_crate)), attempt(ignore(inner_attr)))),
             spaces(),
         )),
-    ))
-    .parse(code)
-    .unwrap_or_else(|_| {
+    ));
+    header.parse(code).unwrap_or_else(|_| {
         debug_assert!(false, "extract_code_headers should always succeed");
         warn!("failed to split code: {}", code);
         ("", code)
