@@ -96,7 +96,11 @@ mod test {
         }
         const TESTCASES: &[Testcase<'_>] = &[
             Testcase {
-                input: &[("a", 300)],
+                input: &[("a", 216)],
+                expected: &[("a", 216)],
+            },
+            Testcase {
+                input: &[("a", 217)],
                 expected: &[("a", 213), ("...", 1)],
             },
             Testcase {
