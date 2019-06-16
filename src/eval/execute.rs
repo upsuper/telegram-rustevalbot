@@ -63,42 +63,7 @@ fn run_code(
     flags: Flags,
     is_private: bool,
 ) -> impl Future<Item = String, Error = &'static str> {
-    macro_rules! template {
-        ($($line:expr,)+) => {
-            concat!($($line, '\n',)+)
-        }
-    }
-    let code = if flags.bare {
-        code.to_string()
-    } else {
-        let (header, body) = extract_code_headers(code);
-        debug!("extract: {:?} -> ({:?}, {:?})", code, header, body);
-        let code = if body.contains("println!") || body.contains("print!") {
-            Cow::from(body)
-        } else {
-            Cow::from(format!(
-                template! {
-                    // Template below would provide the indent of this line.
-                    "println!(\"{{:?}}\", {{",
-                    "        {code}",
-                    "    }})",
-                },
-                code = body
-            ))
-        };
-        format!(
-            template! {
-                "#![allow(unreachable_code)]",
-                "{header}",
-                "",
-                "fn main() {{",
-                "    {code};",
-                "}}",
-            },
-            header = header,
-            code = code,
-        )
-    };
+    let code = generate_code_to_send(code, flags.bare);
     let channel = flags.channel.unwrap_or(Channel::Stable);
     let req = Request {
         channel,
@@ -115,67 +80,107 @@ fn run_code(
         .send()
         .and_then(|resp| resp.error_for_status())
         .and_then(|mut resp| resp.json())
-        .map(move |resp: Response| {
-            if resp.success {
-                let output = resp.stdout.trim();
-                let output = if is_private {
-                    output.into()
-                } else {
-                    const MAX_LINES: usize = 3;
-                    const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
-                    utils::truncate_output(output, MAX_LINES, MAX_TOTAL_COLUMNS)
-                };
-                if output.is_empty() {
-                    return "(no output)".to_string();
-                }
-                return format!("<pre>{}</pre>", encode_minimal(&output));
-            }
-            let mut return_line: Option<&str> = None;
-            for line in resp.stderr.split('\n') {
-                let line = line.trim();
-                if line.starts_with("Compiling")
-                    || line.starts_with("Finished")
-                    || line.starts_with("Running")
-                {
-                    continue;
-                }
-                if line.starts_with("error") {
-                    return_line = Some(line);
-                    break;
-                }
-                if return_line.is_none() {
-                    return_line = Some(line);
-                }
-            }
-            if let Some(line) = return_line {
-                let line = encode_minimal(line);
-                let line = RE_ERROR.replacen(&line, 1, |captures: &Captures<'_>| {
-                    let err_num = captures.get(1).unwrap().as_str();
-                    let url = format!(
-                        "https://doc.rust-lang.org/{}/error-index.html#{}",
-                        channel.as_str(),
-                        err_num,
-                    );
-                    format!(
-                        r#"error<a href="{}">[{}]</a>:"#,
-                        encode_attribute(&url),
-                        err_num,
-                    )
-                });
-                let line = RE_CODE.replace_all(&line, |captures: &Captures<'_>| {
-                    format!("<code>{}</code>", captures.get(1).unwrap().as_str())
-                });
-                let line = RE_ISSUE.replacen(&line, 1, |captures: &Captures<'_>| {
-                    let issue_num = captures.get(1).unwrap().as_str();
-                    let url = format!("https://github.com/rust-lang/rust/issues/{}", issue_num);
-                    format!(r#"(see issue <a href="{}">#{}</a>)"#, url, issue_num)
-                });
-                format!("{}", line)
-            } else {
-                "(nothing??)".to_string()
-            }
-        })
+        .map(move |resp| generate_result_from_response(resp, channel, is_private))
         .map_err(|e| utils::map_reqwest_error(&e))
+}
+
+fn generate_code_to_send(code: &str, bare: bool) -> String {
+    if bare {
+        return code.to_string();
+    }
+    macro_rules! template {
+        ($($line:expr,)+) => {
+            concat!($($line, '\n',)+)
+        }
+    }
+    let (header, body) = extract_code_headers(code);
+    debug!("extract: {:?} -> ({:?}, {:?})", code, header, body);
+    let code = if body.contains("println!") || body.contains("print!") {
+        Cow::from(body)
+    } else {
+        Cow::from(format!(
+            template! {
+                // Template below would provide the indent of this line.
+                "println!(\"{{:?}}\", {{",
+                "        {code}",
+                "    }})",
+            },
+            code = body
+        ))
+    };
+    format!(
+        template! {
+            "#![allow(unreachable_code)]",
+            "{header}",
+            "",
+            "fn main() {{",
+            "    {code};",
+            "}}",
+        },
+        header = header,
+        code = code,
+    )
+}
+
+fn generate_result_from_response(resp: Response, channel: Channel, is_private: bool) -> String {
+    if resp.success {
+        let output = resp.stdout.trim();
+        let output = if is_private {
+            output.into()
+        } else {
+            const MAX_LINES: usize = 3;
+            const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
+            utils::truncate_output(output, MAX_LINES, MAX_TOTAL_COLUMNS)
+        };
+        if output.is_empty() {
+            return "(no output)".to_string();
+        }
+        return format!("<pre>{}</pre>", encode_minimal(&output));
+    }
+    let mut return_line: Option<&str> = None;
+    for line in resp.stderr.split('\n') {
+        let line = line.trim();
+        if line.starts_with("Compiling")
+            || line.starts_with("Finished")
+            || line.starts_with("Running")
+        {
+            continue;
+        }
+        if line.starts_with("error") {
+            return_line = Some(line);
+            break;
+        }
+        if return_line.is_none() {
+            return_line = Some(line);
+        }
+    }
+    if let Some(line) = return_line {
+        let line = encode_minimal(line);
+        let line = RE_ERROR.replacen(&line, 1, |captures: &Captures<'_>| {
+            let err_num = captures.get(1).unwrap().as_str();
+            let url = format!(
+                "https://doc.rust-lang.org/{}/error-index.html#{}",
+                channel.as_str(),
+                err_num,
+            );
+            format!(
+                r#"error<a href="{}">[{}]</a>:"#,
+                encode_attribute(&url),
+                err_num,
+            )
+        });
+        let line = RE_CODE.replace_all(&line, |captures: &Captures<'_>| {
+            format!("<code>{}</code>", captures.get(1).unwrap().as_str())
+        });
+        let line = RE_ISSUE.replacen(&line, 1, |captures: &Captures<'_>| {
+            let issue_num = captures.get(1).unwrap().as_str();
+            let url = format!("https://github.com/rust-lang/rust/issues/{}", issue_num);
+            format!(r#"(see issue <a href="{}">#{}</a>)"#, url, issue_num)
+        });
+        format!("{}", line)
+    } else {
+        "(nothing??)".to_string()
+    }
 }
 
 #[derive(Debug, Serialize)]
