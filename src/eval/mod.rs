@@ -57,7 +57,7 @@ impl EvalBot {
         let bot = self.bot.clone();
         let records = self.records.clone();
         Box::new(future.then(move |reply| {
-            let reply = reply.unwrap();
+            let reply = generate_reply(reply);
             let reply = reply.trim_matches(char::is_whitespace);
             debug!("{}> sending: {:?}", id.0, reply);
             bot.send_message(chat_id, reply)
@@ -82,7 +82,7 @@ impl EvalBot {
         let records = self.records.clone();
         match self.prepare_command(id, message) {
             Some(future) => Box::new(future.then(move |reply| {
-                let reply = reply.unwrap();
+                let reply = generate_reply(reply);
                 let reply = reply.trim_matches(char::is_whitespace);
                 debug!("{}> updating: {:?}", id.0, reply);
                 bot.edit_message(chat_id, reply_id, reply)
@@ -123,5 +123,12 @@ impl EvalBot {
         let is_private = utils::is_message_from_private_chat(&message);
         let (flags, content) = parse::parse_command(&command)?;
         execute::execute(&self.client, content, flags, is_private)
+    }
+}
+
+fn generate_reply(reply: Result<String, &str>) -> String {
+    match reply {
+        Ok(reply) => reply,
+        Err(err) => format!("error: {}", err),
     }
 }
