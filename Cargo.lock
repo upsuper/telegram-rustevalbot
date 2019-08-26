@@ -1415,7 +1415,7 @@ dependencies = [
 
 [[package]]
 name = "telegram-rustevalbot"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "combine 3.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
