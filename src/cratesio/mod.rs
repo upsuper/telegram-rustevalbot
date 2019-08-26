@@ -121,7 +121,7 @@ impl Crate {
             encode_with_code(&mut message, description);
         }
 
-        let name_url = encode_for_url(&self.name);
+        let name_url = utf8_percent_encode(&self.name, PATH_SEGMENT_ENCODE_SET);
         let crate_url = format!("https://crates.io/crates/{}", name_url);
         let doc_url = self
             .documentation
@@ -162,8 +162,4 @@ impl Crate {
             thumb_height: None,
         })
     }
-}
-
-fn encode_for_url(s: &str) -> String {
-    utf8_percent_encode(s, PATH_SEGMENT_ENCODE_SET).collect()
 }
