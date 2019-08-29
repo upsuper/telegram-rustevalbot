@@ -9,6 +9,7 @@ use regex::{Captures, Regex};
 use reqwest::r#async::Client;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::fmt::Write;
 
 pub fn execute(
     client: &Client,
@@ -106,25 +107,14 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
         template! {
             "#![allow(unreachable_code)]",
             "{header}",
-            "use std::collections::{{HashMap, HashSet}};",
-            "use std::ffi::{{CStr, CString, OsStr, OsString}};",
-            "use std::fmt::{{self, Debug, Display, Formatter}};",
-            "use std::fs::File;",
-            "use std::io;",
-            "use std::io::prelude::*;",
-            "use std::marker::PhantomData;",
-            "use std::mem::{{MaybeUninit, size_of, swap, transmute}};",
-            "use std::ops::*;",
-            "use std::ptr::NonNull;",
-            "use std::rc::Rc;",
-            "use std::sync::Arc;",
-            "",
+            "{preludes}",
             "fn main() -> Result<(), Box<dyn std::error::Error>> {{",
             "    {code};",
             "    Ok(())",
             "}}",
         },
         header = header,
+        preludes = &*PRELUDES,
         code = code,
     )
 }
@@ -258,6 +248,33 @@ fn extract_code_headers(code: &str) -> (&str, &str) {
         warn!("failed to split code: {}", code);
         ("", code)
     })
+}
+
+lazy_static! {
+    static ref PRELUDES: String = get_preludes();
+}
+
+fn get_preludes() -> String {
+    const LIST: &[&str] = &[
+        "std::collections::{HashMap, HashSet}",
+        "std::ffi::{CStr, CString, OsStr, OsString}",
+        "std::fmt::{self, Debug, Display, Formatter}",
+        "std::fs::File",
+        "std::io",
+        "std::io::prelude::*",
+        "std::marker::PhantomData",
+        "std::mem::{MaybeUninit, size_of, swap, transmute}",
+        "std::ops::*",
+        "std::ptr::NonNull",
+        "std::rc::Rc",
+        "std::sync::Arc",
+    ];
+
+    let mut result = String::new();
+    for item in LIST {
+        writeln!(&mut result, "#[allow(unused_imports)] use {};", item).unwrap();
+    }
+    result
 }
 
 #[cfg(test)]
