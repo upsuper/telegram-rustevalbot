@@ -256,6 +256,11 @@ lazy_static! {
 
 fn get_preludes() -> String {
     const LIST: &[&str] = &[
+        "std::{f32, f64}",
+        "std::{i8, i16, i32, i64, i128, isize}",
+        "std::{str, slice}",
+        "std::{u8, u16, u32, u64, u128, usize}",
+        "std::char",
         "std::collections::{HashMap, HashSet}",
         "std::ffi::{CStr, CString, OsStr, OsString}",
         "std::fmt::{self, Debug, Display, Formatter}",
@@ -263,8 +268,9 @@ fn get_preludes() -> String {
         "std::io",
         "std::io::prelude::*",
         "std::marker::PhantomData",
-        "std::mem::{MaybeUninit, size_of, swap, transmute}",
+        "std::mem::{MaybeUninit, replace, size_of, swap, transmute}",
         "std::ops::*",
+        "std::path::{Path, PathBuf}",
         "std::ptr::NonNull",
         "std::rc::Rc",
         "std::sync::Arc",
