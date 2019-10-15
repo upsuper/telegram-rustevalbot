@@ -5,7 +5,6 @@ use futures::{Future, IntoFuture};
 use htmlescape::encode_minimal;
 use itertools::Itertools;
 use log::{debug, info, warn};
-use percent_encoding::{utf8_percent_encode, PATH_SEGMENT_ENCODE_SET};
 use reqwest::r#async::Client;
 use reqwest::IntoUrl;
 use serde::Deserialize;
@@ -121,11 +120,13 @@ impl Crate {
             encode_with_code(&mut message, description);
         }
 
-        let name_url = utf8_percent_encode(&self.name, PATH_SEGMENT_ENCODE_SET);
-        let crate_url = format!("https://crates.io/crates/{}", name_url);
+        // The name can only use alphanumeric characters or `-` and `_`, so no escape is needed.
+        // See https://doc.rust-lang.org/cargo/reference/manifest.html#the-name-field
+        let name = self.name;
+        let crate_url = format!("https://crates.io/crates/{}", name);
         let doc_url = self
             .documentation
-            .unwrap_or_else(|| format!("https://docs.rs/crate/{}", name_url));
+            .unwrap_or_else(|| format!("https://docs.rs/crate/{}", name));
         let mut buttons = vec![
             InlineKeyboardButton {
                 text: "info".to_string(),
