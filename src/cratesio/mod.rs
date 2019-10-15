@@ -106,14 +106,22 @@ struct Crate {
 
 impl Crate {
     fn into_inline_query_result(self) -> InlineQueryResult<'static> {
-        let description: Option<Cow<'_, str>> = self
-            .description
-            .map(|d| d.split_whitespace().join(" ").into());
-        let title = format!("{} {}", self.name, self.max_version);
+        let Crate {
+            id,
+            name,
+            description,
+            max_version,
+            documentation,
+            repository,
+        } = self;
+
+        let description: Option<Cow<'_, str>> =
+            description.map(|d| d.split_whitespace().join(" ").into());
+        let title = format!("{} {}", name, max_version);
         let mut message = format!(
             "<b>{}</b> ({})",
-            encode_minimal(&self.name),
-            encode_minimal(&self.max_version)
+            encode_minimal(&name),
+            encode_minimal(&max_version)
         );
         if let Some(description) = &description {
             message.push('\n');
@@ -122,11 +130,8 @@ impl Crate {
 
         // The name can only use alphanumeric characters or `-` and `_`, so no escape is needed.
         // See https://doc.rust-lang.org/cargo/reference/manifest.html#the-name-field
-        let name = self.name;
         let crate_url = format!("https://crates.io/crates/{}", name);
-        let doc_url = self
-            .documentation
-            .unwrap_or_else(|| format!("https://docs.rs/crate/{}", name));
+        let doc_url = documentation.unwrap_or_else(|| format!("https://docs.rs/crate/{}", name));
         let mut buttons = vec![
             InlineKeyboardButton {
                 text: "info".to_string(),
@@ -137,7 +142,7 @@ impl Crate {
                 pressed: InlineKeyboardButtonPressed::Url(doc_url),
             },
         ];
-        if let Some(repo) = self.repository {
+        if let Some(repo) = repository {
             buttons.push(InlineKeyboardButton {
                 text: "repo".to_string(),
                 pressed: InlineKeyboardButtonPressed::Url(repo),
@@ -145,7 +150,7 @@ impl Crate {
         }
 
         InlineQueryResult::Article(InlineQueryResultArticle {
-            id: ResultId(self.id),
+            id: ResultId(id),
             title: title.into(),
             input_message_content: InputMessageContent::Text(InputTextMessageContent {
                 message_text: message.into(),
