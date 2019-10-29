@@ -3,8 +3,8 @@ use crate::eval::parse::{get_help_message, Channel, Mode};
 use crate::utils;
 use futures::{Future, IntoFuture};
 use htmlescape::{encode_attribute, encode_minimal};
-use lazy_static::lazy_static;
 use log::{debug, warn};
+use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 use reqwest::r#async::Client;
 use serde::{Deserialize, Serialize};
@@ -135,11 +135,9 @@ fn generate_result_from_response(resp: Response, channel: Channel, is_private: b
         return format!("<pre>{}</pre>", encode_minimal(&output));
     }
 
-    lazy_static! {
-        static ref RE_ERROR: Regex = Regex::new(r"^error\[(E\d{4})\]:").unwrap();
-        static ref RE_CODE: Regex = Regex::new(r"`(.+?)`").unwrap();
-        static ref RE_ISSUE: Regex = Regex::new(r"\(see issue #(\d+)\)").unwrap();
-    }
+    static RE_ERROR: Lazy<Regex> = Lazy::new(|| Regex::new(r"^error\[(E\d{4})\]:").unwrap());
+    static RE_CODE: Lazy<Regex> = Lazy::new(|| Regex::new(r"`(.+?)`").unwrap());
+    static RE_ISSUE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\(see issue #(\d+)\)").unwrap());
     let mut return_line: Option<&str> = None;
     for line in resp.stderr.split('\n') {
         let line = line.trim();
@@ -250,9 +248,7 @@ fn extract_code_headers(code: &str) -> (&str, &str) {
     })
 }
 
-lazy_static! {
-    static ref PRELUDES: String = get_preludes();
-}
+static PRELUDES: Lazy<String> = Lazy::new(get_preludes);
 
 fn get_preludes() -> String {
     const LIST: &[&str] = &[

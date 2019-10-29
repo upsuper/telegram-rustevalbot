@@ -20,8 +20,8 @@ use futures::future::join_all;
 use futures::sync::oneshot::Receiver;
 use futures::Future;
 use itertools::Itertools;
-use lazy_static::lazy_static;
 use log::{error, info};
+use once_cell::sync::Lazy;
 use reqwest::r#async::Client;
 use std::env;
 use std::fmt::Write as FmtWrite;
@@ -29,18 +29,20 @@ use std::io::Write as IOWrite;
 use telegram_types::bot::types::{ChatId, UserId};
 use tokio::runtime::Runtime;
 
-lazy_static! {
-    static ref ADMIN_ID: UserId = env::var("BOT_ADMIN_ID")
+static ADMIN_ID: Lazy<UserId> = Lazy::new(|| {
+    env::var("BOT_ADMIN_ID")
         .ok()
         .and_then(|s| str::parse(&s).map(UserId).ok())
-        .expect("BOT_ADMIN_ID must be a valid user id");
-    static ref ABOUT_MESSAGE: String = format!(
+        .expect("BOT_ADMIN_ID must be a valid user id")
+});
+static ABOUT_MESSAGE: Lazy<String> = Lazy::new(|| {
+    format!(
         "{} {}\n{}",
         env!("CARGO_PKG_NAME"),
         env!("VERSION"),
         env!("CARGO_PKG_HOMEPAGE")
-    );
-}
+    )
+});
 
 fn main() {
     // We don't care if we fail to load .env file.
