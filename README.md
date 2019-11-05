@@ -9,8 +9,7 @@ This bot program handles Eval bot and Crates.io bot.
 This is a Telegram bot for simple query of Rust-related stuff,
 inspired by [Playbot NG](https://github.com/panicbit/playbot_ng) on IRC.
 
-The official instance of this bot is [@rustevalbot](https://t.me/rustevalbot),
-and it has [a testing channel](https://t.me/rustevalbot_test).
+The official instance of this bot is [@rustevalbot](https://t.me/rustevalbot).
 
 ### Usage
 
