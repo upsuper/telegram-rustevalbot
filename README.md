@@ -97,6 +97,9 @@ For the User ID, one can get their own User ID
 via [@userinfobot](https://t.me/userinfobot)
 or [@JsonDumpBot](https://t.me/JsonDumpBot).
 
+If the Rust doc bot is enabled,
+a `search-index.js` file from Rust doc must be present.
+
 The Eval bot requires write permission to `record_list.json`
 in the current directory in order to persist command information
 across reboot for command editing.
@@ -106,6 +109,9 @@ across reboot for command editing.
 This bot listens on `upgrade` file in the current directory,
 and when the file gets written,
 the bot will quit itself as if a `/shutdown` command is sent.
+
+You need to have this file available,
+otherwise bot would refuse to run.
 
 ## License
 
