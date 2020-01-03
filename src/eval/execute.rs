@@ -38,13 +38,12 @@ fn get_version(
         "https://play.rust-lang.org/meta/version/{}",
         channel.unwrap_or(Channel::Stable).as_str(),
     );
-    client
-        .get(&url)
-        .send()
-        .and_then(|resp| future::ready(resp.error_for_status()))
-        .and_then(|resp| resp.json())
-        .map_ok(|resp: Version| format!("rustc {} ({:.9} {})", resp.version, resp.hash, resp.date))
-        .map_err(|e| utils::map_reqwest_error(&e))
+    let resp = client.get(&url).send();
+    let future = async {
+        let v: Version = resp.await?.error_for_status()?.json().await?;
+        Ok(format!("rustc {} ({:.9} {})", v.version, v.hash, v.date,))
+    };
+    future.map_err(|e| utils::map_reqwest_error(&e))
 }
 
 #[derive(Deserialize)]
@@ -71,14 +70,13 @@ fn run_code(
         backtrace: false,
         code,
     };
-    client
-        .post("https://play.rust-lang.org/execute")
-        .json(&req)
-        .send()
-        .and_then(|resp| future::ready(resp.error_for_status()))
-        .and_then(|resp| resp.json())
-        .map_ok(move |resp| generate_result_from_response(resp, channel, is_private))
-        .map_err(|e| utils::map_reqwest_error(&e))
+    const URL: &str = "https://play.rust-lang.org/execute";
+    let resp = client.post(URL).json(&req).send();
+    let future = async move {
+        let resp = resp.await?.error_for_status()?.json().await?;
+        Ok(generate_result_from_response(resp, channel, is_private))
+    };
+    future.map_err(|e| utils::map_reqwest_error(&e))
 }
 
 fn generate_code_to_send(code: &str, bare: bool) -> String {
