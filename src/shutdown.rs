@@ -1,4 +1,4 @@
-use futures::sync::oneshot::{channel, Receiver, Sender};
+use futures::channel::oneshot::{channel, Receiver, Sender};
 use parking_lot::Mutex;
 use std::sync::Arc;
 

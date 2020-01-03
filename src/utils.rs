@@ -16,14 +16,20 @@ impl fmt::Display for Void {
 }
 
 pub fn map_reqwest_error(error: &reqwest::Error) -> &'static str {
-    if error.is_http() || error.is_redirect() {
+    if error.is_builder() {
+        "builder error"
+    } else if error.is_redirect() {
         "failed to request"
-    } else if error.is_serialization() {
-        "failed to parse result"
-    } else if error.is_client_error() {
-        "client error"
-    } else if error.is_server_error() {
-        "server error"
+    } else if error.is_timeout() {
+        "timeout"
+    } else if let Some(status) = error.status() {
+        if status.is_client_error() {
+            "client error"
+        } else if status.is_server_error() {
+            "server error"
+        } else {
+            "unknown status code"
+        }
     } else {
         "unknown error"
     }

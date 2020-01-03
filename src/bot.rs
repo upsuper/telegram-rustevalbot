@@ -1,16 +1,19 @@
 use derive_more::From;
-use futures::future::Either;
-use futures::sync::oneshot::Receiver;
-use futures::{Async, Future, IntoFuture, Poll, Stream};
+use futures::channel::oneshot::Receiver;
+use futures::future::{self, Either, TryFutureExt as _};
+use futures::Stream;
 use log::debug;
 use reqwest;
-use reqwest::r#async::{Client, Request};
+use reqwest::{Client, Request};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::fmt;
+use std::future::Future;
 use std::marker::PhantomData;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
 use telegram_types::bot::inline_mode::{AnswerInlineQuery, InlineQueryId, InlineQueryResult};
 use telegram_types::bot::methods::{
@@ -18,8 +21,7 @@ use telegram_types::bot::methods::{
     TelegramResult,
 };
 use telegram_types::bot::types::{ChatId, Message, MessageId, ParseMode, Update, UpdateId};
-use tokio_timer::timeout::{self, Timeout};
-use tokio_timer::Error as TimerError;
+use tokio::time::{timeout, Elapsed};
 
 /// Telegram bot
 #[derive(Clone, Debug)]
@@ -31,13 +33,16 @@ pub struct Bot {
 }
 
 impl Bot {
-    pub fn create(client: Client, token: &'static str) -> impl Future<Item = Self, Error = Error> {
+    pub fn create(
+        client: Client,
+        token: &'static str,
+    ) -> impl Future<Output = Result<Self, Error>> {
         let bot = Bot {
             client,
             token,
             username: "",
         };
-        bot.build_request(&GetMe).execute().map(move |user| {
+        bot.build_request(&GetMe).execute().map_ok(move |user| {
             let username = Box::leak(user.username.expect("No username?").into_boxed_str());
             Bot { username, ..bot }
         })
@@ -57,10 +62,10 @@ impl Bot {
         }
     }
 
-    pub fn confirm_update(&self, update_id: UpdateId) -> impl Future<Item = (), Error = Error> {
+    pub fn confirm_update(&self, update_id: UpdateId) -> impl Future<Output = Result<(), Error>> {
         let mut get_updates = GetUpdates::new();
         get_updates.offset(UpdateId(update_id.0 + 1));
-        self.build_request(&get_updates).execute().map(|_| ())
+        self.build_request(&get_updates).execute().map_ok(|_| ())
     }
 
     pub fn send_message<'a>(
@@ -135,26 +140,28 @@ where
     T: Send,
     for<'de> T: Deserialize<'de>,
 {
-    pub fn execute(self) -> impl Future<Item = T, Error = Error> + Send {
+    pub fn execute(self) -> impl Future<Output = Result<T, Error>> + Send {
         let req = match self.request {
             Ok(req) => req,
-            Err(err) => return Either::B(Err(err.into()).into_future()),
+            Err(err) => return Either::Right(future::err(err.into())),
         };
         let future = self
             .client
             .execute(req)
-            .and_then(|resp| resp.into_body().concat2())
-            .map_err(Error::from)
+            .and_then(|resp| resp.bytes())
+            .map_err(Error::Request)
             .and_then(
                 |data| match serde_json::from_slice::<TelegramResult<T>>(&data) {
-                    Ok(result) => Ok(Into::<Result<_, _>>::into(result)?),
-                    Err(error) => Err(Error::Parse(ParseError {
+                    Ok(result) => {
+                        future::ready(Into::<Result<_, _>>::into(result).map_err(Error::Api))
+                    }
+                    Err(error) => future::err(Error::Parse(ParseError {
                         data: data.into_iter().collect(),
                         error,
                     })),
                 },
             );
-        Either::A(future)
+        Either::Left(future)
     }
 }
 
@@ -162,7 +169,6 @@ where
 pub enum Error {
     Request(reqwest::Error),
     Api(ApiError),
-    Timer(TimerError),
     Parse(ParseError),
 }
 
@@ -191,58 +197,54 @@ impl UpdateStream {
     }
 }
 
-type PendingFuture = Box<dyn Future<Item = Vec<Update>, Error = timeout::Error<Error>> + Send>;
+type PendingFuture =
+    Pin<Box<dyn Future<Output = Result<Result<Vec<Update>, Error>, Elapsed>> + Send>>;
 
 const TELEGRAM_TIMEOUT_SECS: u16 = 5;
 
 impl Stream for UpdateStream {
-    type Item = Update;
-    type Error = Error;
+    type Item = Result<Update, Error>;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        match self.stop_signal.poll() {
-            Ok(Async::Ready(())) => return Ok(Async::Ready(None)),
-            Ok(Async::NotReady) => {}
-            Err(err) => unreachable!("Shutdown singal dies: {:?}", err),
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        let mut_self = self.get_mut();
+        match Pin::new(&mut mut_self.stop_signal).poll(cx) {
+            Poll::Ready(Ok(())) => return Poll::Ready(None),
+            Poll::Pending => {}
+            Poll::Ready(Err(err)) => unreachable!("Shutdown singal dies: {:?}", err),
         }
         loop {
-            if let Some(update) = self.buffer.pop_front() {
-                debug!("{}: {:?}", self.bot.username, update);
-                break Ok(Async::Ready(Some(update)));
+            if let Some(update) = mut_self.buffer.pop_front() {
+                debug!("{}: {:?}", mut_self.bot.username, update);
+                break Poll::Ready(Some(Ok(update)));
             }
-            let mut request = self.current_request.take().unwrap_or_else(|| {
+            let mut request = mut_self.current_request.take().unwrap_or_else(|| {
                 let mut get_updates = GetUpdates::new();
-                if let Some(update_id) = self.update_id {
+                if let Some(update_id) = mut_self.update_id {
                     get_updates.offset(update_id);
                 }
                 get_updates.timeout = Some(i32::from(TELEGRAM_TIMEOUT_SECS));
-                Box::new(Timeout::new(
-                    self.bot.build_request(&get_updates).execute(),
+                Box::pin(timeout(
                     Duration::from_secs(u64::from(TELEGRAM_TIMEOUT_SECS)),
+                    mut_self.bot.build_request(&get_updates).execute(),
                 ))
             });
-            match request.poll() {
-                Ok(Async::Ready(updates)) => {
+            match Pin::new(&mut request).poll(cx) {
+                Poll::Ready(Ok(Ok(updates))) => {
                     if let Some(last_update) = updates.last() {
-                        self.bump_update_id(last_update.update_id);
+                        mut_self.bump_update_id(last_update.update_id);
                     }
-                    self.buffer = VecDeque::from(updates);
+                    mut_self.buffer = VecDeque::from(updates);
                 }
-                Ok(Async::NotReady) => {
-                    self.current_request = Some(request);
-                    break Ok(Async::NotReady);
+                Poll::Pending => {
+                    mut_self.current_request = Some(request);
+                    break Poll::Pending;
                 }
-                Err(err) => {
-                    if err.is_inner() {
-                        let error = err.into_inner().unwrap();
-                        self.may_recover_from_error(&error);
-                        break Err(error);
-                    }
-                    if err.is_timer() {
-                        break Err(err.into_timer().unwrap().into());
-                    }
+                Poll::Ready(Ok(Err(err))) => {
+                    mut_self.may_recover_from_error(&err);
+                    break Poll::Ready(Some(Err(err)));
+                }
+                Poll::Ready(Err(_elapsed)) => {
                     // Timeout, loop back and do a new one.
-                    debug_assert!(err.is_elapsed());
                 }
             }
         }

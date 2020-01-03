@@ -1,10 +1,12 @@
 use self::record::RecordService;
 use crate::bot::Bot;
 use crate::utils;
-use futures::{Future, IntoFuture};
+use futures::future::{self, FutureExt as _, TryFutureExt as _};
 use log::{debug, info, warn};
 use parking_lot::Mutex;
-use reqwest::r#async::Client;
+use reqwest::Client;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use telegram_types::bot::types::{Message, Update, UpdateContent, UpdateId};
 
@@ -19,7 +21,7 @@ pub struct EvalBot {
     records: Arc<Mutex<RecordService>>,
 }
 
-type BoxFuture = Box<dyn Future<Item = (), Error = ()> + Send>;
+type PinBoxFuture = Pin<Box<dyn Future<Output = Result<(), ()>> + Send>>;
 
 impl EvalBot {
     /// Create new eval bot instance.
@@ -34,20 +36,20 @@ impl EvalBot {
     }
 
     /// Handle the update.
-    pub fn handle_update(&self, update: Update) -> BoxFuture {
+    pub fn handle_update(&self, update: Update) -> PinBoxFuture {
         let id = update.update_id;
         match update.content {
             UpdateContent::Message(message) => self.handle_message(id, &message),
             UpdateContent::EditedMessage(message) => self.handle_edit_message(id, &message),
-            _ => Box::new(Ok(()).into_future()),
+            _ => Box::pin(future::ok(())),
         }
     }
 
-    fn handle_message(&self, id: UpdateId, message: &Message) -> BoxFuture {
+    fn handle_message(&self, id: UpdateId, message: &Message) -> PinBoxFuture {
         self.records.lock().clear_old_records(&message.date);
         let future = match self.prepare_command(id, message) {
             Some(future) => future,
-            None => return Box::new(Ok(()).into_future()),
+            None => return Box::pin(future::ok(())),
         };
         let msg_id = message.message_id;
         self.records
@@ -61,7 +63,7 @@ impl EvalBot {
         let placeholder_future = bot
             .send_message(chat_id, "<em>Processing...</em>")
             .execute()
-            .map(move |msg| {
+            .map_ok(move |msg| {
                 let reply_id = msg.message_id;
                 debug!("{}> placeholder sent as {}", id.0, reply_id.0);
                 records.lock().set_reply(msg_id, reply_id);
@@ -70,24 +72,25 @@ impl EvalBot {
             .map_err(move |err| warn!("{}> error: {:?}", id.0, err));
 
         // Update the reply to the real result.
-        let future = future
-            .then(|reply| Ok(generate_reply(reply)))
-            .join(placeholder_future);
-        Box::new(future.and_then(move |(reply, reply_id)| {
+        let future = future::try_join(
+            future.then(|reply| future::ok(generate_reply(reply))),
+            placeholder_future,
+        );
+        Box::pin(future.and_then(move |(reply, reply_id)| {
             let reply = reply.trim_matches(char::is_whitespace);
             debug!("{}> updating reply: {:?}", id.0, reply);
             bot.edit_message(chat_id, reply_id, reply)
                 .execute()
-                .map(move |_| debug!("{}> reply sent", id.0))
+                .map_ok(move |_| debug!("{}> reply sent", id.0))
                 .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
         }))
     }
 
-    fn handle_edit_message(&self, id: UpdateId, message: &Message) -> BoxFuture {
+    fn handle_edit_message(&self, id: UpdateId, message: &Message) -> PinBoxFuture {
         let msg_id = message.message_id;
         let reply_id = match self.records.lock().find_reply(msg_id) {
             Some(reply) => reply,
-            None => return Box::new(Ok(()).into_future()),
+            None => return Box::pin(future::ok(())),
         };
         let chat_id = message.chat.id;
         let bot = self.bot.clone();
@@ -97,10 +100,10 @@ impl EvalBot {
                 // Delete reply if the new command is invalid.
                 debug!("{}> deleting", id.0);
                 self.records.lock().remove_reply(msg_id);
-                return Box::new(
+                return Box::pin(
                     bot.delete_message(chat_id, reply_id)
                         .execute()
-                        .map(move |_| debug!("{}> deleted", id.0))
+                        .map_ok(move |_| debug!("{}> deleted", id.0))
                         .map_err(move |err| warn!("{}> error: {:?}", id.0, err)),
                 );
             }
@@ -110,19 +113,20 @@ impl EvalBot {
         let placeholder_future = bot
             .edit_message(chat_id, reply_id, "<em>Updating...</em>")
             .execute()
-            .map(move |_| debug!("{}> placeholder updated", id.0))
+            .map_ok(move |_| debug!("{}> placeholder updated", id.0))
             .map_err(move |err| warn!("{}> error: {:?}", id.0, err));
 
         // Update the reply to the real result.
-        let future = future
-            .then(|reply| Ok(generate_reply(reply)))
-            .join(placeholder_future);
-        Box::new(future.and_then(move |(reply, _)| {
+        let future = future::try_join(
+            future.then(|reply| future::ok(generate_reply(reply))),
+            placeholder_future,
+        );
+        Box::pin(future.and_then(move |(reply, _)| {
             let reply = reply.trim_matches(char::is_whitespace);
             debug!("{}> updating: {:?}", id.0, reply);
             bot.edit_message(chat_id, reply_id, reply)
                 .execute()
-                .map(move |_| debug!("{}> updated", id.0))
+                .map_ok(move |_| debug!("{}> updated", id.0))
                 .map_err(move |err| warn!("{}> error: {:?}", id.0, err))
         }))
     }
@@ -131,7 +135,7 @@ impl EvalBot {
         &self,
         id: UpdateId,
         message: &Message,
-    ) -> Option<impl Future<Item = String, Error = &'static str>> {
+    ) -> Option<impl Future<Output = Result<String, &'static str>>> {
         // Don't care about messages not sent from a user.
         let from = message.from.as_ref()?;
         // Don't care about non-text messages.

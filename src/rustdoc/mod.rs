@@ -1,12 +1,12 @@
 use self::search::ItemType;
 use crate::bot::Bot;
 use crate::utils::encode_with_code;
-use futures::future::Either;
-use futures::{Future, IntoFuture};
+use futures::future::{self, Either, TryFutureExt as _};
 use itertools::Itertools;
 use log::{info, warn};
 use rustdoc_seeker::DocItem;
 use sha2::{Digest, Sha256};
+use std::future::Future;
 use telegram_types::bot::inline_mode::{
     InlineQueryResult, InlineQueryResultArticle, InputMessageContent, InputTextMessageContent,
     ResultId,
@@ -27,10 +27,10 @@ impl RustdocBot {
         RustdocBot { bot }
     }
 
-    pub fn handle_update(&self, update: Update) -> impl Future<Item = (), Error = ()> {
+    pub fn handle_update(&self, update: Update) -> impl Future<Output = Result<(), ()>> {
         let query = match update.content {
             UpdateContent::InlineQuery(query) => query,
-            _ => return Either::A(Ok(()).into_future()),
+            _ => return Either::Left(future::ok(())),
         };
         let result = search::query(&query.query)
             .into_iter()
@@ -41,9 +41,9 @@ impl RustdocBot {
             .bot
             .answer_inline_query(query.id, &result)
             .execute()
-            .map(|_| ())
+            .map_ok(|_| ())
             .map_err(|e| warn!("failed to answer query: {:?}", e));
-        Either::B(future)
+        Either::Right(future)
     }
 }
 

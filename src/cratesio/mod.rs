@@ -1,14 +1,13 @@
 use crate::bot::Bot;
 use crate::utils::encode_with_code;
-use futures::future::Either;
-use futures::{Future, IntoFuture};
+use futures::future::{self, Either, TryFutureExt as _};
 use htmlescape::encode_minimal;
 use itertools::Itertools;
 use log::{debug, info, warn};
-use reqwest::r#async::Client;
-use reqwest::IntoUrl;
+use reqwest::{Client, IntoUrl};
 use serde::Deserialize;
 use std::borrow::Cow;
+use std::future::Future;
 use telegram_types::bot::inline_mode::{
     InlineQueryResult, InlineQueryResultArticle, InputMessageContent, InputTextMessageContent,
     ResultId,
@@ -30,13 +29,13 @@ impl CratesioBot {
         CratesioBot { client, bot }
     }
 
-    pub fn handle_update(&self, update: Update) -> impl Future<Item = (), Error = ()> {
+    pub fn handle_update(&self, update: Update) -> impl Future<Output = Result<(), ()>> {
         let query = match update.content {
             UpdateContent::InlineQuery(query) => query,
-            _ => return Either::A(Ok(()).into_future()),
+            _ => return Either::Left(future::ok(())),
         };
         let result = if query.query.is_empty() {
-            Either::A(
+            Either::Left(
                 self.generate_results("https://crates.io/api/v1/summary", |resp: Summary| {
                     resp.most_recently_downloaded
                 }),
@@ -47,7 +46,7 @@ impl CratesioBot {
                 .append_pair("q", &query.query)
                 .append_pair("sort", "relevance")
                 .append_pair("per_page", "50");
-            Either::B(self.generate_results(url, |resp: Crates| resp.crates))
+            Either::Right(self.generate_results(url, |resp: Crates| resp.crates))
         };
         let bot = self.bot.clone();
         let future = result
@@ -56,26 +55,26 @@ impl CratesioBot {
                 debug!("replying: {:?}", r);
                 bot.answer_inline_query(query.id, &r)
                     .execute()
-                    .map(|_| ())
+                    .map_ok(|_| ())
                     .map_err(|e| warn!("failed to answer query: {:?}", e))
             });
-        Either::B(future)
+        Either::Right(future)
     }
 
     fn generate_results<T>(
         &self,
         url: impl IntoUrl,
         get_crates: impl FnOnce(T) -> Vec<Crate>,
-    ) -> impl Future<Item = Vec<InlineQueryResult<'static>>, Error = reqwest::Error>
+    ) -> impl Future<Output = Result<Vec<InlineQueryResult<'static>>, reqwest::Error>>
     where
         for<'de> T: Deserialize<'de>,
     {
         self.client
             .get(url)
             .send()
-            .and_then(|resp| resp.error_for_status())
-            .and_then(|mut resp| resp.json())
-            .map(move |resp: T| {
+            .and_then(|resp| future::ready(resp.error_for_status()))
+            .and_then(|resp| resp.json())
+            .map_ok(move |resp: T| {
                 get_crates(resp)
                     .into_iter()
                     .map(|c| c.into_inline_query_result())

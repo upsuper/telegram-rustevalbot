@@ -1,16 +1,19 @@
 use crate::bot::{Bot, Error, UpdateStream};
 use crate::shutdown::Shutdown;
 use crate::utils;
-use futures::future::Either;
-use futures::sync::oneshot::{channel, Receiver};
-use futures::{Async, Future, IntoFuture, Poll, Stream};
+use futures::channel::oneshot::{channel, Receiver};
+use futures::future::{self, Either, FutureExt as _, TryFutureExt as _};
+use futures::Stream;
 use log::{debug, error, info, warn};
-use reqwest::r#async::Client;
+use reqwest::Client;
 use std::env::{self, VarError};
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::time::Duration;
 use telegram_types::bot::types::{Update, UpdateContent};
-use tokio_timer::Delay;
+use tokio::time::{delay_for, Delay};
 
 pub fn run<Impl, Creator, Handler, HandleResult>(
     name: &'static str,
@@ -21,14 +24,14 @@ pub fn run<Impl, Creator, Handler, HandleResult>(
     handle_update: Handler,
     report_error: fn(&Bot, &Error),
 ) -> (
-    impl Future<Item = (), Error = ()> + Send,
+    impl Future<Output = Result<(), ()>> + Send,
     Receiver<Result<Option<Bot>, ()>>,
 )
 where
-    Impl: Send + Sync + 'static,
+    Impl: Send + Sync + Unpin + 'static,
     Creator: (FnOnce(Bot) -> Impl) + Send + 'static,
-    Handler: (Fn(&Impl, Update) -> HandleResult) + Send + Sync + 'static,
-    HandleResult: Future<Item = (), Error = ()> + Send + 'static,
+    Handler: (Fn(&Impl, Update) -> HandleResult) + Send + Sync + Unpin + 'static,
+    HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
 {
     let (sender, receiver) = channel();
     let token = match env::var(token_env) {
@@ -36,7 +39,7 @@ where
         Err(VarError::NotPresent) => {
             info!("{} wouldn't start because {} is not set", name, token_env);
             sender.send(Ok(None)).unwrap();
-            return (Either::A(Ok(()).into_future()), receiver);
+            return (Either::Left(future::ok(())), receiver);
         }
         Err(VarError::NotUnicode(s)) => {
             panic!("invalid value for {}: {:?}", token_env, s);
@@ -46,7 +49,7 @@ where
         .then(move |bot_result| {
             let result = bot_result.map_err(|e| error!("failed to init bot for {}: {:?}", name, e));
             sender.send(result.clone().map(Some)).unwrap();
-            result
+            future::ready(result)
         })
         .and_then(move |bot| BotRun {
             stream: bot.get_updates(shutdown.register()),
@@ -57,7 +60,7 @@ where
             shutdown,
             report_error,
         });
-    (Either::B(future), receiver)
+    (Either::Right(future), receiver)
 }
 
 struct BotRun<Impl, Handler> {
@@ -72,54 +75,43 @@ struct BotRun<Impl, Handler> {
 
 impl<Impl, Handler> Future for BotRun<Impl, Handler>
 where
-    Self: UpdateHandler,
+    Self: UpdateHandler + Unpin,
 {
-    type Item = ();
-    type Error = ();
+    type Output = Result<(), ()>;
 
-    fn poll(&mut self) -> Poll<(), ()> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), ()>> {
+        let mut_self = self.get_mut();
         loop {
-            if let Some(delay) = &mut self.delay {
-                match delay.poll() {
-                    Ok(Async::NotReady) => break Ok(Async::NotReady),
-                    Ok(Async::Ready(())) => {}
-                    Err(err) => {
-                        error!("timer error: {:?}", err);
-                        break Err(());
-                    }
+            if let Some(delay) = &mut mut_self.delay {
+                match Pin::new(delay).poll(cx) {
+                    Poll::Pending => break Poll::Pending,
+                    Poll::Ready(()) => {}
                 }
             }
-            self.delay = None;
+            mut_self.delay = None;
 
-            match self.stream.poll() {
-                Ok(result) => {
-                    match result {
-                        Async::NotReady => break Ok(Async::NotReady),
-                        Async::Ready(resp) => {
-                            self.retried = 0;
-                            match resp {
-                                Some(update) => {
-                                    self.handle_update(update);
-                                    // Go through the loop again to ensure that
-                                    // we don't get stuck.
-                                }
-                                None => {
-                                    break Ok(Async::Ready(()));
-                                }
-                            }
-                        }
-                    }
+            match Pin::new(&mut mut_self.stream).poll_next(cx) {
+                Poll::Pending => break Poll::Pending,
+                Poll::Ready(None) => {
+                    mut_self.retried = 0;
+                    break Poll::Ready(Ok(()));
                 }
-                Err(e) => {
-                    self.report_error(&e);
-                    warn!("({}) telegram error: {:?}", self.retried, e);
-                    if self.retried >= 13 {
+                Poll::Ready(Some(Ok(update))) => {
+                    mut_self.retried = 0;
+                    mut_self.handle_update(update);
+                    // Go through the loop again to ensure that
+                    // we don't get stuck.
+                }
+                Poll::Ready(Some(Err(e))) => {
+                    mut_self.report_error(&e);
+                    warn!("({}) telegram error: {:?}", mut_self.retried, e);
+                    if mut_self.retried >= 13 {
                         error!("retried too many times!");
-                        break Err(());
+                        break Poll::Ready(Err(()));
                     } else {
-                        let delay_duration = Duration::from_secs(1 << self.retried);
-                        self.delay = Some(tokio_timer::sleep(delay_duration));
-                        self.retried += 1;
+                        let delay_duration = Duration::from_secs(1 << mut_self.retried);
+                        mut_self.delay = Some(delay_for(delay_duration));
+                        mut_self.retried += 1;
                     }
                 }
             }
@@ -134,7 +126,7 @@ trait UpdateHandler {
 impl<Impl, Handler, HandleResult> UpdateHandler for BotRun<Impl, Handler>
 where
     Handler: Fn(&Impl, Update) -> HandleResult,
-    HandleResult: Future<Item = (), Error = ()> + Send + 'static,
+    HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
 {
     fn handle_update(&self, update: Update) {
         debug!("{}> handling", update.update_id.0);
@@ -164,7 +156,7 @@ impl<Impl, Handler> BotRun<Impl, Handler> {
             let future = bot
                 .send_message(chat_id, text)
                 .execute()
-                .map(move |msg| {
+                .map_ok(move |msg| {
                     debug!(
                         "{}> sent about message as {}",
                         update_id.0, msg.message_id.0

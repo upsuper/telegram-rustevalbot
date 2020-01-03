@@ -14,7 +14,7 @@ env_logger = "0.7.0"
 derive_more = "0.99.2"
 fst = "0.3"
 fst-subseq-ascii-caseless = "0.1"
-futures = "0.1"
+futures = "0.3.1"
 htmlescape = "0.3"
 itertools = "0.8.0"
 log = "0.4"
@@ -28,15 +28,17 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.8.0"
 telegram_types = "0.5.0"
-tokio = "0.1.13"
-tokio-timer = "0.2.8"
 unicode-width = "0.1"
-url = "1.7.1"
+url = "2.1.0"
 
 [dependencies.reqwest]
-version = "0.9.18"
+version = "0.10.0"
 default-features = false
-features = ["rustls-tls", "trust-dns"]
+features = ["json", "rustls-tls"]
+
+[dependencies.tokio]
+version = "0.2.6"
+features = ["full"]
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.1.5"
