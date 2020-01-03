@@ -102,14 +102,12 @@ fn main() {
     // by its connection pool.
     drop(client);
 
-    fn bind_name(
+    async fn bind_name(
         receiver: Receiver<Result<Option<Bot>, ()>>,
         name: &'static str,
-    ) -> impl Future<Output = Result<Option<(&'static str, Bot)>, ()>> {
-        receiver
-            .map_err(|_| ())
-            .and_then(|b| future::ready(b))
-            .map_ok(move |b| b.map(move |b| (name, b)))
+    ) -> Result<Option<(&'static str, Bot)>, ()> {
+        let b = receiver.await.map_err(|_| ())?;
+        Ok(b?.map(|b| (name, b)))
     }
     let (bot, start_msg) = runtime
         .block_on(
