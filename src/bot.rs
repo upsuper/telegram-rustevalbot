@@ -1,6 +1,6 @@
 use derive_more::From;
 use futures::channel::oneshot::Receiver;
-use futures::future::{self, Either, TryFutureExt as _};
+use futures::future::TryFutureExt as _;
 use futures::Stream;
 use log::debug;
 use reqwest;
@@ -72,7 +72,7 @@ impl Bot {
         &self,
         chat_id: ChatId,
         text: impl Into<Cow<'a, str>>,
-    ) -> BotRequest<'_, Message> {
+    ) -> BotRequest<Message> {
         let mut send_message =
             SendMessage::new(ChatTarget::id(chat_id.0), text).parse_mode(ParseMode::HTML);
         send_message.disable_web_page_preview = Some(true);
@@ -84,14 +84,14 @@ impl Bot {
         chat_id: ChatId,
         message_id: MessageId,
         text: impl Into<Cow<'a, str>>,
-    ) -> BotRequest<'_, Message> {
+    ) -> BotRequest<Message> {
         let edit_message = EditMessageText::new(ChatTarget::id(chat_id.0), message_id, text)
             .parse_mode(ParseMode::HTML)
             .disable_preview();
         self.build_request(&edit_message)
     }
 
-    pub fn delete_message(&self, chat_id: ChatId, message_id: MessageId) -> BotRequest<'_, bool> {
+    pub fn delete_message(&self, chat_id: ChatId, message_id: MessageId) -> BotRequest<bool> {
         let delete_message = DeleteMessage {
             chat_id: ChatTarget::id(chat_id.0),
             message_id,
@@ -103,7 +103,7 @@ impl Bot {
         &self,
         inline_query_id: InlineQueryId,
         results: &[InlineQueryResult<'_>],
-    ) -> BotRequest<'_, bool> {
+    ) -> BotRequest<bool> {
         let answer = AnswerInlineQuery {
             inline_query_id,
             results: results.into(),
@@ -116,52 +116,41 @@ impl Bot {
         self.build_request(&answer)
     }
 
-    fn build_request<'s, R>(&'s self, request: &R) -> BotRequest<'s, R::Item>
+    fn build_request<R>(&self, request: &R) -> BotRequest<R::Item>
     where
         R: Method + Serialize,
     {
         let request = self.client.post(&R::url(self.token)).json(&request).build();
         BotRequest {
-            client: &self.client,
+            client: self.client.clone(),
             request,
             phantom: PhantomData,
         }
     }
 }
 
-pub struct BotRequest<'a, T> {
-    client: &'a Client,
+pub struct BotRequest<T> {
+    client: Client,
     request: Result<Request, reqwest::Error>,
     phantom: PhantomData<T>,
 }
 
-impl<'a, T> BotRequest<'a, T>
+impl<T> BotRequest<T>
 where
     T: Send,
     for<'de> T: Deserialize<'de>,
 {
-    pub fn execute(self) -> impl Future<Output = Result<T, Error>> + Send {
-        let req = match self.request {
-            Ok(req) => req,
-            Err(err) => return Either::Right(future::err(err.into())),
-        };
-        let future = self
-            .client
-            .execute(req)
-            .and_then(|resp| resp.bytes())
-            .map_err(Error::Request)
-            .and_then(
-                |data| match serde_json::from_slice::<TelegramResult<T>>(&data) {
-                    Ok(result) => {
-                        future::ready(Into::<Result<_, _>>::into(result).map_err(Error::Api))
-                    }
-                    Err(error) => future::err(Error::Parse(ParseError {
-                        data: data.into_iter().collect(),
-                        error,
-                    })),
-                },
-            );
-        Either::Left(future)
+    pub async fn execute(self) -> Result<T, Error> {
+        let req = self.request?;
+        let resp = self.client.execute(req).await?;
+        let data = resp.bytes().await?;
+        match serde_json::from_slice::<TelegramResult<T>>(&data) {
+            Ok(result) => Into::<Result<_, _>>::into(result).map_err(Error::Api),
+            Err(error) => Err(Error::Parse(ParseError {
+                data: data.into_iter().collect(),
+                error,
+            })),
+        }
     }
 }
 
