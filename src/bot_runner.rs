@@ -28,7 +28,7 @@ pub fn run<Impl, Creator, Handler, HandleResult>(
 where
     Impl: Send + Sync + 'static,
     Creator: (FnOnce(Bot) -> Impl) + Send + 'static,
-    Handler: (Fn(&Impl, Update) -> HandleResult) + Send + Sync + 'static,
+    Handler: (Fn(Arc<Impl>, Update) -> HandleResult) + Send + Sync + 'static,
     HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
 {
     let (sender, receiver) = channel();
@@ -56,7 +56,7 @@ where
         sender.send(Ok(Some(bot.clone()))).unwrap();
         run_bot(
             bot.get_updates(shutdown.register()),
-            create_impl(bot),
+            Arc::new(create_impl(bot)),
             handle_update,
             shutdown,
             report_error,
@@ -68,13 +68,13 @@ where
 
 async fn run_bot<Impl, Handler, HandleResult>(
     mut stream: UpdateStream,
-    bot_impl: Impl,
+    bot_impl: Arc<Impl>,
     handle_update: Handler,
     shutdown: Arc<Shutdown>,
     report_error: fn(&Bot, &Error),
 ) -> Result<(), ()>
 where
-    Handler: Fn(&Impl, Update) -> HandleResult,
+    Handler: Fn(Arc<Impl>, Update) -> HandleResult,
     HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
 {
     let mut retried = 0;
@@ -91,7 +91,7 @@ where
                 retried = 0;
                 debug!("{}> handling", update.update_id.0);
                 if !may_handle_common_command(&update, stream.bot(), &shutdown) {
-                    tokio::spawn((handle_update)(&bot_impl, update));
+                    tokio::spawn((handle_update)(bot_impl.clone(), update));
                 }
             }
             Some(Err(e)) => {

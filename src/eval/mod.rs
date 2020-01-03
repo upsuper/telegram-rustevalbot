@@ -36,7 +36,7 @@ impl EvalBot {
     }
 
     /// Handle the update.
-    pub fn handle_update(&self, update: Update) -> PinBoxFuture {
+    pub fn handle_update(self: Arc<Self>, update: Update) -> PinBoxFuture {
         let id = update.update_id;
         match update.content {
             UpdateContent::Message(message) => self.handle_message(id, &message),

@@ -7,6 +7,7 @@ use log::{info, warn};
 use rustdoc_seeker::DocItem;
 use sha2::{Digest, Sha256};
 use std::future::Future;
+use std::sync::Arc;
 use telegram_types::bot::inline_mode::{
     InlineQueryResult, InlineQueryResultArticle, InputMessageContent, InputTextMessageContent,
     ResultId,
@@ -27,7 +28,7 @@ impl RustdocBot {
         RustdocBot { bot }
     }
 
-    pub fn handle_update(&self, update: Update) -> impl Future<Output = Result<(), ()>> {
+    pub fn handle_update(self: Arc<Self>, update: Update) -> impl Future<Output = Result<(), ()>> {
         let query = match update.content {
             UpdateContent::InlineQuery(query) => query,
             _ => return Either::Left(future::ok(())),
