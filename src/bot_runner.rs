@@ -3,6 +3,7 @@ use crate::shutdown::Shutdown;
 use crate::utils;
 use futures::channel::oneshot::{channel, Receiver};
 use futures::future::{self, Either, TryFutureExt as _};
+use futures::pin_mut;
 use futures::stream::StreamExt as _;
 use log::{debug, error, info, warn};
 use reqwest::Client;
@@ -55,17 +56,16 @@ where
         };
         sender.send(Ok(Some(bot.clone()))).unwrap();
         let stop_signal = shutdown.register();
-        let result = future::select(
-            stop_signal,
-            Box::pin(run_bot(
-                bot.clone(),
-                bot.get_updates(),
-                Arc::new(create_impl(bot)),
-                handle_update,
-                shutdown,
-                report_error,
-            )),
+        let bot_runner = run_bot(
+            bot.clone(),
+            bot.get_updates(),
+            Arc::new(create_impl(bot)),
+            handle_update,
+            shutdown,
+            report_error,
         );
+        pin_mut!(bot_runner);
+        let result = future::select(stop_signal, bot_runner);
         match result.await {
             Either::Left((result, _)) => match result {
                 Ok(()) => Ok(()),
