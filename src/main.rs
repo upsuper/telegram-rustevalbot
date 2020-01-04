@@ -8,6 +8,7 @@ mod rustdoc;
 mod shutdown;
 #[cfg(unix)]
 mod signal;
+mod task_tracker;
 mod upgrade;
 mod utils;
 
@@ -59,45 +60,40 @@ fn main() {
     info!("Running as `{}`", env!("USER_AGENT"));
 
     let mut runtime = Runtime::new().unwrap();
+    let (spawner, waiter) = task_tracker::create(&runtime);
     let client = build_client();
     let bot_runner = BotRunner {
         client: &client,
+        spawner: &spawner,
         shutdown: &shutdown,
         report_error: report_error_to_admin,
     };
 
     // Kick off eval bot.
     let client_clone = client.clone();
-    let (eval_future, eval_receiver) = bot_runner.run(
+    let eval_receiver = bot_runner.run(
         "eval",
         "EVAL_TELEGRAM_TOKEN",
         move |bot| EvalBot::new(client_clone, bot),
         EvalBot::handle_update,
     );
-    let eval_bot = runtime.spawn(eval_future);
 
     // Kick off cratesio bot.
     let client_clone = client.clone();
-    let (cratesio_future, cratesio_receiver) = bot_runner.run(
+    let cratesio_receiver = bot_runner.run(
         "cratesio",
         "CRATESIO_TELEGRAM_TOKEN",
         move |bot| CratesioBot::new(client_clone, bot),
         CratesioBot::handle_update,
     );
-    let cratesio_bot = runtime.spawn(cratesio_future);
 
     // Kick off rustdoc bot.
-    let (rustdoc_future, rustdoc_receiver) = bot_runner.run(
+    let rustdoc_receiver = bot_runner.run(
         "rustdoc",
         "RUSTDOC_TELEGRAM_TOKEN",
         RustdocBot::new,
         RustdocBot::handle_update,
     );
-    let rustdoc_bot = runtime.spawn(rustdoc_future);
-
-    // Drop the client otherwise shutdown_on_idle below may be blocked
-    // by its connection pool.
-    drop(client);
 
     async fn bind_name(
         receiver: Receiver<Result<Option<Bot>, ()>>,
@@ -106,45 +102,32 @@ fn main() {
         let b = receiver.await.map_err(|_| ())?;
         Ok(b?.map(|b| (name, b)))
     }
-    let (bot, start_msg) = runtime
-        .block_on(
-            future::try_join_all(vec![
-                bind_name(eval_receiver, "eval"),
-                bind_name(cratesio_receiver, "cratesio"),
-                bind_name(rustdoc_receiver, "rustdoc"),
-            ])
-            .map_ok(|bots| {
-                let bots = bots.into_iter().filter_map(|info| info).collect_vec();
-                let mut start_msg = format!("Start version: {}", env!("VERSION"));
-                for (name, bot) in bots.iter() {
-                    write!(&mut start_msg, "\nbot {} @{}", name, bot.username).unwrap();
-                }
-                let (_, first_bot) = bots.into_iter().next().expect("no bot configured?");
-                (first_bot, start_msg)
-            }),
-        )
+
+    let bot = runtime.block_on(async {
+        let bots = future::try_join_all(vec![
+            bind_name(eval_receiver, "eval"),
+            bind_name(cratesio_receiver, "cratesio"),
+            bind_name(rustdoc_receiver, "rustdoc"),
+        ])
+        .await
         .unwrap();
+        let bots = bots.into_iter().filter_map(|info| info).collect_vec();
+        let mut start_msg = format!("Start version: {}", env!("VERSION"));
+        for (name, bot) in bots.iter() {
+            write!(&mut start_msg, "\nbot {} @{}", name, bot.username).unwrap();
+        }
+        let (_, first_bot) = bots.into_iter().next().expect("no bot configured?");
+        send_message_to_admin(&first_bot, start_msg).await.unwrap();
+        first_bot
+    });
 
-    // This message will be sent with the original client we created above,
-    // so use runtime to run it.
-    runtime.spawn(send_message_to_admin(&bot, start_msg));
-
-    runtime.block_on(future::join_all(vec![eval_bot, cratesio_bot, rustdoc_bot]));
-
-    // Replace the client inside the bot with a new one so that it doesn't
-    // block the shutdown.
-    let bot = bot.with_client(build_client());
-    // Wait for the runtime to shutdown.
-    // TODO: There is no direct replacement of shutdown_on_idle in tokio 0.2.
-    //  Disable for now. Need to figure out a fix later.
-    //  See https://github.com/tokio-rs/tokio/issues/1957
-    // runtime.shutdown_on_idle().wait().unwrap();
-
-    // Send the final message with the new client.
-    let bye = send_message_to_admin(&bot, "bye".to_string());
-    // Drop the bot (and its client) so that nothing blocks tokio::run to finish.
-    drop(bot);
-    runtime.block_on(bye).unwrap();
+    runtime.block_on(async move {
+        waiter.wait().await;
+        // Send the final message.
+        send_message_to_admin(&bot, "bye".to_string())
+            .await
+            .unwrap();
+    });
 }
 
 fn init_logger() {

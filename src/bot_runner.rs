@@ -1,8 +1,9 @@
 use crate::bot::{Bot, Error};
 use crate::shutdown::Shutdown;
+use crate::task_tracker::TaskSpawner;
 use crate::utils;
 use futures::channel::oneshot::{channel, Receiver};
-use futures::future::{self, Either, TryFutureExt as _};
+use futures::future;
 use futures::pin_mut;
 use futures::stream::{Stream, StreamExt as _};
 use log::{debug, error, info, warn};
@@ -16,6 +17,7 @@ use tokio::time::delay_for;
 
 pub struct BotRunner<'a> {
     pub client: &'a Client,
+    pub spawner: &'a Arc<TaskSpawner>,
     pub shutdown: &'a Arc<Shutdown>,
     pub report_error: fn(&Bot, &Error),
 }
@@ -27,15 +29,12 @@ impl<'a> BotRunner<'a> {
         token_env: &'static str,
         create_impl: Creator,
         handle_update: Handler,
-    ) -> (
-        impl Future<Output = Result<(), ()>> + Send,
-        Receiver<Result<Option<Bot>, ()>>,
-    )
+    ) -> Receiver<Result<Option<Bot>, ()>>
     where
         Impl: Send + Sync + 'static,
         Creator: (FnOnce(Bot) -> Impl) + Send + 'static,
         Handler: (Fn(Arc<Impl>, Update) -> HandleResult) + Send + Sync + 'static,
-        HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
+        HandleResult: Future<Output = ()> + Send + 'static,
     {
         let (sender, receiver) = channel();
         let token = match env::var(token_env) {
@@ -43,22 +42,23 @@ impl<'a> BotRunner<'a> {
             Err(VarError::NotPresent) => {
                 info!("{} wouldn't start because {} is not set", name, token_env);
                 sender.send(Ok(None)).unwrap();
-                return (Either::Left(future::ok(())), receiver);
+                return receiver;
             }
             Err(VarError::NotUnicode(s)) => {
                 panic!("invalid value for {}: {:?}", token_env, s);
             }
         };
         let client = self.client.clone();
+        let spawner = self.spawner.clone();
         let shutdown = self.shutdown.clone();
         let report_error = self.report_error;
-        let future = async move {
+        self.spawner.spawn(async move {
             let bot = match Bot::create(client, token).await {
                 Ok(bot) => bot,
                 Err(e) => {
                     error!("failed to init bot for {}: {:?}", name, e);
                     sender.send(Err(())).unwrap();
-                    return Err(());
+                    return;
                 }
             };
             sender.send(Ok(Some(bot.clone()))).unwrap();
@@ -68,20 +68,14 @@ impl<'a> BotRunner<'a> {
                 bot.get_updates(),
                 Arc::new(create_impl(bot.clone())),
                 handle_update,
+                spawner,
                 shutdown,
                 report_error,
             );
             pin_mut!(bot_runner);
-            let result = future::select(stop_signal, bot_runner);
-            match result.await {
-                Either::Left((result, _)) => match result {
-                    Ok(()) => Ok(()),
-                    Err(err) => unreachable!("shutdown signal dies: {:?}", err),
-                },
-                Either::Right(((), _)) => Err(()),
-            }
-        };
-        (Either::Right(future), receiver)
+            future::select(stop_signal, bot_runner).await;
+        });
+        receiver
     }
 }
 
@@ -90,11 +84,12 @@ async fn run_bot<Impl, Handler, HandleResult>(
     stream: impl Stream<Item = Result<Update, Error>>,
     bot_impl: Arc<Impl>,
     handle_update: Handler,
+    spawner: Arc<TaskSpawner>,
     shutdown: Arc<Shutdown>,
     report_error: fn(&Bot, &Error),
 ) where
     Handler: Fn(Arc<Impl>, Update) -> HandleResult,
-    HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
+    HandleResult: Future<Output = ()> + Send + 'static,
 {
     pin_mut!(stream);
     let mut retried = 0;
@@ -110,8 +105,8 @@ async fn run_bot<Impl, Handler, HandleResult>(
             Some(Ok(update)) => {
                 retried = 0;
                 debug!("{}> handling", update.update_id.0);
-                if !may_handle_common_command(&update, bot, &shutdown) {
-                    tokio::spawn((handle_update)(bot_impl.clone(), update));
+                if !may_handle_common_command(&update, bot, &spawner, &shutdown) {
+                    spawner.spawn((handle_update)(bot_impl.clone(), update));
                 }
             }
             Some(Err(e)) => {
@@ -130,7 +125,12 @@ async fn run_bot<Impl, Handler, HandleResult>(
     }
 }
 
-fn may_handle_common_command(update: &Update, bot: &Bot, shutdown: &Shutdown) -> bool {
+fn may_handle_common_command(
+    update: &Update,
+    bot: &Bot,
+    spawner: &Arc<TaskSpawner>,
+    shutdown: &Shutdown,
+) -> bool {
     let message = match &update.content {
         UpdateContent::Message(message) => message,
         _ => return false,
@@ -145,17 +145,16 @@ fn may_handle_common_command(update: &Update, bot: &Bot, shutdown: &Shutdown) ->
     let chat_id = message.chat.id;
     let update_id = update.update_id;
     let send_reply = |text: &str| {
-        let future = bot
-            .send_message(chat_id, text)
-            .execute()
-            .map_ok(move |msg| {
-                debug!(
+        let future = bot.send_message(chat_id, text).execute();
+        spawner.spawn(async move {
+            match future.await {
+                Ok(msg) => debug!(
                     "{}> sent about message as {}",
                     update_id.0, msg.message_id.0
-                );
-            })
-            .map_err(move |err| warn!("{}> error: {:?}", update_id.0, err));
-        tokio::spawn(future);
+                ),
+                Err(err) => warn!("{}> error: {:?}", update_id.0, err),
+            }
+        });
     };
     match command.trim() {
         "/about" => {
@@ -171,9 +170,13 @@ fn may_handle_common_command(update: &Update, bot: &Bot, shutdown: &Shutdown) ->
             }
             send_reply("start shutting down...");
             shutdown.shutdown();
-            tokio::spawn(bot.confirm_update(update_id).map_err(|e| {
-                error!("failed to confirm: {:?}", e);
-            }));
+            let bot = bot.clone();
+            spawner.spawn(async move {
+                let result = bot.confirm_update(update_id).await;
+                if let Err(e) = result {
+                    error!("failed to confirm: {:?}", e);
+                }
+            });
         }
         _ => return false,
     }

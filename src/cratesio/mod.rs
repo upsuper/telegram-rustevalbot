@@ -28,10 +28,10 @@ impl CratesioBot {
         CratesioBot { client, bot }
     }
 
-    pub async fn handle_update(self: Arc<Self>, update: Update) -> Result<(), ()> {
+    pub async fn handle_update(self: Arc<Self>, update: Update) {
         let query = match update.content {
             UpdateContent::InlineQuery(query) => query,
-            _ => return Ok(()),
+            _ => return,
         };
         let result = if query.query.is_empty() {
             self.generate_results("https://crates.io/api/v1/summary", |resp: Summary| {
@@ -46,14 +46,22 @@ impl CratesioBot {
                 .append_pair("per_page", "50");
             self.generate_results(url, |resp: Crates| resp.crates).await
         };
-        let r = result.map_err(|e| warn!("failed to get results: {:?}", e))?;
-        debug!("replying: {:?}", r);
-        self.bot
-            .answer_inline_query(query.id, &r)
+        let result = match result {
+            Ok(result) => result,
+            Err(e) => {
+                warn!("failed to get results: {:?}", e);
+                return;
+            }
+        };
+        debug!("replying: {:?}", result);
+        let result = self
+            .bot
+            .answer_inline_query(query.id, &result)
             .execute()
-            .await
-            .map(|_| ())
-            .map_err(|e| warn!("failed to answer query: {:?}", e))
+            .await;
+        if let Err(e) = result {
+            warn!("failed to answer query: {:?}", e);
+        }
     }
 
     async fn generate_results<T>(

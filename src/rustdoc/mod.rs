@@ -26,22 +26,24 @@ impl RustdocBot {
         RustdocBot { bot }
     }
 
-    pub async fn handle_update(self: Arc<Self>, update: Update) -> Result<(), ()> {
+    pub async fn handle_update(self: Arc<Self>, update: Update) {
         let query = match update.content {
             UpdateContent::InlineQuery(query) => query,
-            _ => return Ok(()),
+            _ => return,
         };
         let result = search::query(&query.query)
             .into_iter()
             .take(50)
             .map(doc_item_to_result)
             .collect_vec();
-        self.bot
+        let result = self
+            .bot
             .answer_inline_query(query.id, &result)
             .execute()
-            .await
-            .map(|_| ())
-            .map_err(|e| warn!("failed to answer query: {:?}", e))
+            .await;
+        if let Err(e) = result {
+            warn!("failed to answer query: {:?}", e);
+        }
     }
 }
 

@@ -43,10 +43,6 @@ impl Bot {
         Ok(Bot { username, ..bot })
     }
 
-    pub fn with_client(self, client: Client) -> Self {
-        Bot { client, ..self }
-    }
-
     pub fn get_updates(&self) -> impl Stream<Item = Result<Update, Error>> + '_ {
         #[derive(Default)]
         struct Data {
