@@ -14,67 +14,75 @@ use std::time::Duration;
 use telegram_types::bot::types::{Update, UpdateContent};
 use tokio::time::delay_for;
 
-pub fn run<Impl, Creator, Handler, HandleResult>(
-    name: &'static str,
-    token_env: &'static str,
-    client: &Client,
-    shutdown: Arc<Shutdown>,
-    create_impl: Creator,
-    handle_update: Handler,
-    report_error: fn(&Bot, &Error),
-) -> (
-    impl Future<Output = Result<(), ()>> + Send,
-    Receiver<Result<Option<Bot>, ()>>,
-)
-where
-    Impl: Send + Sync + 'static,
-    Creator: (FnOnce(Bot) -> Impl) + Send + 'static,
-    Handler: (Fn(Arc<Impl>, Update) -> HandleResult) + Send + Sync + 'static,
-    HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
-{
-    let (sender, receiver) = channel();
-    let token = match env::var(token_env) {
-        Ok(token) => Box::leak(token.into_boxed_str()),
-        Err(VarError::NotPresent) => {
-            info!("{} wouldn't start because {} is not set", name, token_env);
-            sender.send(Ok(None)).unwrap();
-            return (Either::Left(future::ok(())), receiver);
-        }
-        Err(VarError::NotUnicode(s)) => {
-            panic!("invalid value for {}: {:?}", token_env, s);
-        }
-    };
-    let client = client.clone();
-    let future = async move {
-        let bot = match Bot::create(client, token).await {
-            Ok(bot) => bot,
-            Err(e) => {
-                error!("failed to init bot for {}: {:?}", name, e);
-                sender.send(Err(())).unwrap();
-                return Err(());
+pub struct BotRunner<'a> {
+    pub client: &'a Client,
+    pub shutdown: &'a Arc<Shutdown>,
+    pub report_error: fn(&Bot, &Error),
+}
+
+impl<'a> BotRunner<'a> {
+    pub fn run<Impl, Creator, Handler, HandleResult>(
+        &self,
+        name: &'static str,
+        token_env: &'static str,
+        create_impl: Creator,
+        handle_update: Handler,
+    ) -> (
+        impl Future<Output = Result<(), ()>> + Send,
+        Receiver<Result<Option<Bot>, ()>>,
+    )
+    where
+        Impl: Send + Sync + 'static,
+        Creator: (FnOnce(Bot) -> Impl) + Send + 'static,
+        Handler: (Fn(Arc<Impl>, Update) -> HandleResult) + Send + Sync + 'static,
+        HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
+    {
+        let (sender, receiver) = channel();
+        let token = match env::var(token_env) {
+            Ok(token) => Box::leak(token.into_boxed_str()),
+            Err(VarError::NotPresent) => {
+                info!("{} wouldn't start because {} is not set", name, token_env);
+                sender.send(Ok(None)).unwrap();
+                return (Either::Left(future::ok(())), receiver);
+            }
+            Err(VarError::NotUnicode(s)) => {
+                panic!("invalid value for {}: {:?}", token_env, s);
             }
         };
-        sender.send(Ok(Some(bot.clone()))).unwrap();
-        let stop_signal = shutdown.register();
-        let bot_runner = run_bot(
-            &bot,
-            bot.get_updates(),
-            Arc::new(create_impl(bot.clone())),
-            handle_update,
-            shutdown,
-            report_error,
-        );
-        pin_mut!(bot_runner);
-        let result = future::select(stop_signal, bot_runner);
-        match result.await {
-            Either::Left((result, _)) => match result {
-                Ok(()) => Ok(()),
-                Err(err) => unreachable!("shutdown signal dies: {:?}", err),
-            },
-            Either::Right(((), _)) => Err(()),
-        }
-    };
-    (Either::Right(future), receiver)
+        let client = self.client.clone();
+        let shutdown = self.shutdown.clone();
+        let report_error = self.report_error;
+        let future = async move {
+            let bot = match Bot::create(client, token).await {
+                Ok(bot) => bot,
+                Err(e) => {
+                    error!("failed to init bot for {}: {:?}", name, e);
+                    sender.send(Err(())).unwrap();
+                    return Err(());
+                }
+            };
+            sender.send(Ok(Some(bot.clone()))).unwrap();
+            let stop_signal = shutdown.register();
+            let bot_runner = run_bot(
+                &bot,
+                bot.get_updates(),
+                Arc::new(create_impl(bot.clone())),
+                handle_update,
+                shutdown,
+                report_error,
+            );
+            pin_mut!(bot_runner);
+            let result = future::select(stop_signal, bot_runner);
+            match result.await {
+                Either::Left((result, _)) => match result {
+                    Ok(()) => Ok(()),
+                    Err(err) => unreachable!("shutdown signal dies: {:?}", err),
+                },
+                Either::Right(((), _)) => Err(()),
+            }
+        };
+        (Either::Right(future), receiver)
+    }
 }
 
 async fn run_bot<Impl, Handler, HandleResult>(

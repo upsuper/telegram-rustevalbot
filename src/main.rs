@@ -12,6 +12,7 @@ mod upgrade;
 mod utils;
 
 use crate::bot::{Bot, Error};
+use crate::bot_runner::BotRunner;
 use crate::cratesio::CratesioBot;
 use crate::eval::EvalBot;
 use crate::rustdoc::RustdocBot;
@@ -59,42 +60,38 @@ fn main() {
 
     let mut runtime = Runtime::new().unwrap();
     let client = build_client();
+    let bot_runner = BotRunner {
+        client: &client,
+        shutdown: &shutdown,
+        report_error: report_error_to_admin,
+    };
 
     // Kick off eval bot.
     let client_clone = client.clone();
-    let (eval_future, eval_receiver) = bot_runner::run(
+    let (eval_future, eval_receiver) = bot_runner.run(
         "eval",
         "EVAL_TELEGRAM_TOKEN",
-        &client,
-        shutdown.clone(),
         move |bot| EvalBot::new(client_clone, bot),
         EvalBot::handle_update,
-        report_error_to_admin,
     );
     let eval_bot = runtime.spawn(eval_future);
 
     // Kick off cratesio bot.
     let client_clone = client.clone();
-    let (cratesio_future, cratesio_receiver) = bot_runner::run(
+    let (cratesio_future, cratesio_receiver) = bot_runner.run(
         "cratesio",
         "CRATESIO_TELEGRAM_TOKEN",
-        &client,
-        shutdown.clone(),
         move |bot| CratesioBot::new(client_clone, bot),
         CratesioBot::handle_update,
-        report_error_to_admin,
     );
     let cratesio_bot = runtime.spawn(cratesio_future);
 
     // Kick off rustdoc bot.
-    let (rustdoc_future, rustdoc_receiver) = bot_runner::run(
+    let (rustdoc_future, rustdoc_receiver) = bot_runner.run(
         "rustdoc",
         "RUSTDOC_TELEGRAM_TOKEN",
-        &client,
-        shutdown.clone(),
         RustdocBot::new,
         RustdocBot::handle_update,
-        report_error_to_admin,
     );
     let rustdoc_bot = runtime.spawn(rustdoc_future);
 
