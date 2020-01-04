@@ -1,7 +1,7 @@
 use super::parse::Flags;
 use crate::eval::parse::{get_help_message, Channel, Mode};
 use crate::utils;
-use futures::future;
+use futures::{future, FutureExt as _};
 use htmlescape::{encode_attribute, encode_minimal};
 use log::{debug, warn};
 use once_cell::sync::Lazy;
@@ -11,38 +11,33 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt::Write;
 use std::future::Future;
-use std::pin::Pin;
 
-pub fn execute(
-    client: &Client,
-    content: &str,
+pub fn execute<'p>(
+    client: &'p Client,
+    content: &'p str,
     flags: Flags,
     is_private: bool,
-) -> Option<Pin<Box<dyn Future<Output = Result<String, reqwest::Error>> + Send>>> {
-    if flags.help {
-        Some(Box::pin(future::ok(get_help_message())))
+) -> Option<impl Future<Output = Result<String, reqwest::Error>> + 'p> {
+    Some(if flags.help {
+        future::ok(get_help_message()).left_future().left_future()
     } else if flags.version {
-        Some(Box::pin(get_version(client, flags.channel)))
+        let channel = flags.channel;
+        get_version(client, channel).right_future().left_future()
     } else if !content.trim().is_empty() {
-        Some(Box::pin(run_code(client, content, flags, is_private)))
+        run_code(client, content, flags, is_private).right_future()
     } else {
-        None
-    }
+        return None;
+    })
 }
 
-fn get_version(
-    client: &Client,
-    channel: Option<Channel>,
-) -> impl Future<Output = Result<String, reqwest::Error>> {
+async fn get_version(client: &Client, channel: Option<Channel>) -> Result<String, reqwest::Error> {
     let url = format!(
         "https://play.rust-lang.org/meta/version/{}",
         channel.unwrap_or(Channel::Stable).as_str(),
     );
-    let resp = client.get(&url).send();
-    async {
-        let v: Version = resp.await?.error_for_status()?.json().await?;
-        Ok(format!("rustc {} ({:.9} {})", v.version, v.hash, v.date,))
-    }
+    let resp = client.get(&url).send().await?;
+    let v: Version = resp.error_for_status()?.json().await?;
+    Ok(format!("rustc {} ({:.9} {})", v.version, v.hash, v.date))
 }
 
 #[derive(Deserialize)]
@@ -52,12 +47,12 @@ struct Version {
     version: String,
 }
 
-fn run_code(
+async fn run_code(
     client: &Client,
     code: &str,
     flags: Flags,
     is_private: bool,
-) -> impl Future<Output = Result<String, reqwest::Error>> {
+) -> Result<String, reqwest::Error> {
     let code = generate_code_to_send(code, flags.bare);
     let channel = flags.channel.unwrap_or(Channel::Stable);
     let req = Request {
@@ -70,11 +65,9 @@ fn run_code(
         code,
     };
     const URL: &str = "https://play.rust-lang.org/execute";
-    let resp = client.post(URL).json(&req).send();
-    async move {
-        let resp = resp.await?.error_for_status()?.json().await?;
-        Ok(generate_result_from_response(resp, channel, is_private))
-    }
+    let resp = client.post(URL).json(&req).send().await?;
+    let resp = resp.error_for_status()?.json().await?;
+    Ok(generate_result_from_response(resp, channel, is_private))
 }
 
 fn generate_code_to_send(code: &str, bare: bool) -> String {

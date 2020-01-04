@@ -127,11 +127,11 @@ impl EvalBot {
         }
     }
 
-    fn prepare_command(
-        &self,
+    fn prepare_command<'p>(
+        &'p self,
         id: UpdateId,
-        message: &Message,
-    ) -> Option<impl Future<Output = Result<String, reqwest::Error>>> {
+        message: &'p Message,
+    ) -> Option<impl Future<Output = Result<String, reqwest::Error>> + 'p> {
         // Don't care about messages not sent from a user.
         let from = message.from.as_ref()?;
         // Don't care about non-text messages.
