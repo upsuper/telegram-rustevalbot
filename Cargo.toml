@@ -38,7 +38,7 @@ features = ["json", "rustls-tls"]
 
 [dependencies.tokio]
 version = "0.2.6"
-features = ["full"]
+features = ["rt-core", "rt-threaded", "sync"]
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.1.5"
