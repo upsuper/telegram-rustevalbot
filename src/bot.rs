@@ -33,19 +33,15 @@ pub struct Bot {
 }
 
 impl Bot {
-    pub fn create(
-        client: Client,
-        token: &'static str,
-    ) -> impl Future<Output = Result<Self, Error>> {
+    pub async fn create(client: Client, token: &'static str) -> Result<Self, Error> {
         let bot = Bot {
             client,
             token,
             username: "",
         };
-        bot.build_request(&GetMe).execute().map_ok(move |user| {
-            let username = Box::leak(user.username.expect("No username?").into_boxed_str());
-            Bot { username, ..bot }
-        })
+        let user = bot.build_request(&GetMe).execute().await?;
+        let username = Box::leak(user.username.expect("No username?").into_boxed_str());
+        Ok(Bot { username, ..bot })
     }
 
     pub fn with_client(self, client: Client) -> Self {
