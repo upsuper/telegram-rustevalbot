@@ -1,6 +1,6 @@
 use derive_more::From;
 use futures::future::TryFutureExt as _;
-use futures::Stream;
+use futures::stream::{self, Stream};
 use log::debug;
 use reqwest;
 use reqwest::{Client, Request};
@@ -11,8 +11,6 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::future::Future;
 use std::marker::PhantomData;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::Duration;
 use telegram_types::bot::inline_mode::{AnswerInlineQuery, InlineQueryId, InlineQueryResult};
 use telegram_types::bot::methods::{
@@ -20,7 +18,9 @@ use telegram_types::bot::methods::{
     TelegramResult,
 };
 use telegram_types::bot::types::{ChatId, Message, MessageId, ParseMode, Update, UpdateId};
-use tokio::time::{timeout, Elapsed};
+use tokio::time::timeout;
+
+const TELEGRAM_TIMEOUT_SECS: u16 = 5;
 
 /// Telegram bot
 #[derive(Clone, Debug)]
@@ -47,13 +47,55 @@ impl Bot {
         Bot { client, ..self }
     }
 
-    pub fn get_updates(&self) -> UpdateStream {
-        UpdateStream {
-            bot: self.clone(),
-            update_id: None,
-            buffer: VecDeque::new(),
-            current_request: None,
+    pub fn get_updates(&self) -> impl Stream<Item = Result<Update, Error>> + '_ {
+        #[derive(Default)]
+        struct Data {
+            update_id: Option<UpdateId>,
+            buffer: VecDeque<Update>,
         }
+
+        fn bump_update_id(data: &mut Data, update_id: UpdateId) {
+            data.update_id = Some(UpdateId(update_id.0 + 1));
+        }
+
+        stream::unfold(Default::default(), move |mut data: Data| {
+            async move {
+                let result = loop {
+                    if let Some(update) = data.buffer.pop_front() {
+                        debug!("{}: {:?}", self.username, update);
+                        break Ok(update);
+                    }
+                    let mut get_updates = GetUpdates::new();
+                    if let Some(update_id) = data.update_id {
+                        get_updates.offset(update_id);
+                    }
+                    get_updates.timeout = Some(i32::from(TELEGRAM_TIMEOUT_SECS));
+                    let result = timeout(
+                        Duration::from_secs(u64::from(TELEGRAM_TIMEOUT_SECS)),
+                        self.build_request(&get_updates).execute(),
+                    )
+                    .await;
+                    match result {
+                        Ok(Ok(updates)) => {
+                            if let Some(last_update) = updates.last() {
+                                bump_update_id(&mut data, last_update.update_id);
+                            }
+                            data.buffer = VecDeque::from(updates);
+                        }
+                        Ok(Err(err)) => {
+                            if let Some(update_id) = may_recover_from_error(&err) {
+                                bump_update_id(&mut data, update_id);
+                            }
+                            break Err(err);
+                        }
+                        Err(_elapsed) => {
+                            // Timeout, loop back and do a new one.
+                        }
+                    }
+                };
+                Some((result, data))
+            }
+        })
     }
 
     pub fn confirm_update(&self, update_id: UpdateId) -> impl Future<Output = Result<(), Error>> {
@@ -166,95 +208,23 @@ impl fmt::Debug for ParseError {
     }
 }
 
-pub struct UpdateStream {
-    bot: Bot,
-    update_id: Option<UpdateId>,
-    buffer: VecDeque<Update>,
-    current_request: Option<PendingFuture>,
-}
-
-type PendingFuture =
-    Pin<Box<dyn Future<Output = Result<Result<Vec<Update>, Error>, Elapsed>> + Send>>;
-
-const TELEGRAM_TIMEOUT_SECS: u16 = 5;
-
-impl Stream for UpdateStream {
-    type Item = Result<Update, Error>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        let mut_self = self.get_mut();
-        loop {
-            if let Some(update) = mut_self.buffer.pop_front() {
-                debug!("{}: {:?}", mut_self.bot.username, update);
-                break Poll::Ready(Some(Ok(update)));
-            }
-            let mut request = mut_self.current_request.take().unwrap_or_else(|| {
-                let mut get_updates = GetUpdates::new();
-                if let Some(update_id) = mut_self.update_id {
-                    get_updates.offset(update_id);
-                }
-                get_updates.timeout = Some(i32::from(TELEGRAM_TIMEOUT_SECS));
-                Box::pin(timeout(
-                    Duration::from_secs(u64::from(TELEGRAM_TIMEOUT_SECS)),
-                    mut_self.bot.build_request(&get_updates).execute(),
-                ))
-            });
-            match Pin::new(&mut request).poll(cx) {
-                Poll::Ready(Ok(Ok(updates))) => {
-                    if let Some(last_update) = updates.last() {
-                        mut_self.bump_update_id(last_update.update_id);
-                    }
-                    mut_self.buffer = VecDeque::from(updates);
-                }
-                Poll::Pending => {
-                    mut_self.current_request = Some(request);
-                    break Poll::Pending;
-                }
-                Poll::Ready(Ok(Err(err))) => {
-                    mut_self.may_recover_from_error(&err);
-                    break Poll::Ready(Some(Err(err)));
-                }
-                Poll::Ready(Err(_elapsed)) => {
-                    // Timeout, loop back and do a new one.
-                }
-            }
-        }
+fn may_recover_from_error(error: &Error) -> Option<UpdateId> {
+    // XXX We should be able to simplify this function once if-let-chain
+    // gets stable. See RFC 2497.
+    let data = match error {
+        Error::Parse(ParseError { data, .. }) => data,
+        _ => return None,
+    };
+    let value = match serde_json::from_slice::<JsonValue>(&data) {
+        Ok(value) => value,
+        Err(_) => return None,
+    };
+    let map = value.as_object()?;
+    if !map.get("ok")?.as_bool()? {
+        return None;
     }
-}
-
-impl UpdateStream {
-    fn bump_update_id(&mut self, update_id: UpdateId) {
-        self.update_id = Some(UpdateId(update_id.0 + 1));
-    }
-
-    fn may_recover_from_error(&mut self, error: &Error) {
-        // XXX We should be able to simplify this function once if-let-chain
-        // gets stable. See RFC 2497.
-        let data = match error {
-            Error::Parse(ParseError { data, .. }) => data,
-            _ => return,
-        };
-        let value = match serde_json::from_slice::<JsonValue>(&data) {
-            Ok(value) => value,
-            Err(_) => return,
-        };
-        let map = match value {
-            JsonValue::Object(map) => map,
-            _ => return,
-        };
-        let ok = map.get("ok").and_then(|v| v.as_bool());
-        if !ok.unwrap_or(false) {
-            return;
-        }
-        let update_id = map
-            .get("result")
-            .and_then(|v| v.as_array())
-            .and_then(|arr| arr.last())
-            .and_then(|item| item.as_object())
-            .and_then(|map| map.get("update_id"))
-            .and_then(|v| v.as_i64());
-        if let Some(update_id) = update_id {
-            self.bump_update_id(UpdateId(update_id));
-        }
-    }
+    let array = map.get("result")?.as_array()?;
+    let item = array.last()?.as_object()?;
+    let id = item.get("update_id")?.as_i64()?;
+    Some(UpdateId(id))
 }

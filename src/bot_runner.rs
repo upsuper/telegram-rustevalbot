@@ -1,10 +1,10 @@
-use crate::bot::{Bot, Error, UpdateStream};
+use crate::bot::{Bot, Error};
 use crate::shutdown::Shutdown;
 use crate::utils;
 use futures::channel::oneshot::{channel, Receiver};
 use futures::future::{self, Either, TryFutureExt as _};
 use futures::pin_mut;
-use futures::stream::StreamExt as _;
+use futures::stream::{Stream, StreamExt as _};
 use log::{debug, error, info, warn};
 use reqwest::Client;
 use std::env::{self, VarError};
@@ -57,9 +57,9 @@ where
         sender.send(Ok(Some(bot.clone()))).unwrap();
         let stop_signal = shutdown.register();
         let bot_runner = run_bot(
-            bot.clone(),
+            &bot,
             bot.get_updates(),
-            Arc::new(create_impl(bot)),
+            Arc::new(create_impl(bot.clone())),
             handle_update,
             shutdown,
             report_error,
@@ -78,8 +78,8 @@ where
 }
 
 async fn run_bot<Impl, Handler, HandleResult>(
-    bot: Bot,
-    mut stream: UpdateStream,
+    bot: &Bot,
+    stream: impl Stream<Item = Result<Update, Error>>,
     bot_impl: Arc<Impl>,
     handle_update: Handler,
     shutdown: Arc<Shutdown>,
@@ -88,6 +88,7 @@ async fn run_bot<Impl, Handler, HandleResult>(
     Handler: Fn(Arc<Impl>, Update) -> HandleResult,
     HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
 {
+    pin_mut!(stream);
     let mut retried = 0;
     let mut delay = None;
     loop {
@@ -101,12 +102,12 @@ async fn run_bot<Impl, Handler, HandleResult>(
             Some(Ok(update)) => {
                 retried = 0;
                 debug!("{}> handling", update.update_id.0);
-                if !may_handle_common_command(&update, &bot, &shutdown) {
+                if !may_handle_common_command(&update, bot, &shutdown) {
                     tokio::spawn((handle_update)(bot_impl.clone(), update));
                 }
             }
             Some(Err(e)) => {
-                (report_error)(&bot, &e);
+                (report_error)(bot, &e);
                 warn!("({}) telegram error: {:?}", retried, e);
                 if retried >= 13 {
                     error!("retried too many times!");
