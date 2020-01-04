@@ -1,5 +1,4 @@
 use derive_more::From;
-use futures::channel::oneshot::Receiver;
 use futures::future::TryFutureExt as _;
 use futures::Stream;
 use log::debug;
@@ -48,13 +47,12 @@ impl Bot {
         Bot { client, ..self }
     }
 
-    pub fn get_updates(&self, stop_signal: Receiver<()>) -> UpdateStream {
+    pub fn get_updates(&self) -> UpdateStream {
         UpdateStream {
             bot: self.clone(),
             update_id: None,
             buffer: VecDeque::new(),
             current_request: None,
-            stop_signal,
         }
     }
 
@@ -173,7 +171,6 @@ pub struct UpdateStream {
     update_id: Option<UpdateId>,
     buffer: VecDeque<Update>,
     current_request: Option<PendingFuture>,
-    stop_signal: Receiver<()>,
 }
 
 impl UpdateStream {
@@ -192,11 +189,6 @@ impl Stream for UpdateStream {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         let mut_self = self.get_mut();
-        match Pin::new(&mut mut_self.stop_signal).poll(cx) {
-            Poll::Ready(Ok(())) => return Poll::Ready(None),
-            Poll::Pending => {}
-            Poll::Ready(Err(err)) => unreachable!("Shutdown singal dies: {:?}", err),
-        }
         loop {
             if let Some(update) = mut_self.buffer.pop_front() {
                 debug!("{}: {:?}", mut_self.bot.username, update);

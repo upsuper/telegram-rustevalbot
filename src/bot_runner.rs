@@ -54,14 +54,24 @@ where
             }
         };
         sender.send(Ok(Some(bot.clone()))).unwrap();
-        run_bot(
-            bot.get_updates(shutdown.register()),
-            Arc::new(create_impl(bot)),
-            handle_update,
-            shutdown,
-            report_error,
-        )
-        .await
+        let stop_signal = shutdown.register();
+        let result = future::select(
+            stop_signal,
+            Box::pin(run_bot(
+                bot.get_updates(),
+                Arc::new(create_impl(bot)),
+                handle_update,
+                shutdown,
+                report_error,
+            )),
+        );
+        match result.await {
+            Either::Left((result, _)) => match result {
+                Ok(()) => Ok(()),
+                Err(err) => unreachable!("shutdown signal dies: {:?}", err),
+            },
+            Either::Right(((), _)) => Err(()),
+        }
     };
     (Either::Right(future), receiver)
 }
@@ -72,8 +82,7 @@ async fn run_bot<Impl, Handler, HandleResult>(
     handle_update: Handler,
     shutdown: Arc<Shutdown>,
     report_error: fn(&Bot, &Error),
-) -> Result<(), ()>
-where
+) where
     Handler: Fn(Arc<Impl>, Update) -> HandleResult,
     HandleResult: Future<Output = Result<(), ()>> + Send + 'static,
 {
@@ -86,7 +95,7 @@ where
         delay = None;
 
         match stream.next().await {
-            None => break Ok(()),
+            None => unreachable!("update stream never ends"),
             Some(Ok(update)) => {
                 retried = 0;
                 debug!("{}> handling", update.update_id.0);
@@ -99,7 +108,7 @@ where
                 warn!("({}) telegram error: {:?}", retried, e);
                 if retried >= 13 {
                     error!("retried too many times!");
-                    break Err(());
+                    break;
                 } else {
                     let delay_duration = Duration::from_secs(1 << retried);
                     delay = Some(delay_for(delay_duration));
