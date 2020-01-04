@@ -58,6 +58,7 @@ where
         let result = future::select(
             stop_signal,
             Box::pin(run_bot(
+                bot.clone(),
                 bot.get_updates(),
                 Arc::new(create_impl(bot)),
                 handle_update,
@@ -77,6 +78,7 @@ where
 }
 
 async fn run_bot<Impl, Handler, HandleResult>(
+    bot: Bot,
     mut stream: UpdateStream,
     bot_impl: Arc<Impl>,
     handle_update: Handler,
@@ -99,12 +101,12 @@ async fn run_bot<Impl, Handler, HandleResult>(
             Some(Ok(update)) => {
                 retried = 0;
                 debug!("{}> handling", update.update_id.0);
-                if !may_handle_common_command(&update, stream.bot(), &shutdown) {
+                if !may_handle_common_command(&update, &bot, &shutdown) {
                     tokio::spawn((handle_update)(bot_impl.clone(), update));
                 }
             }
             Some(Err(e)) => {
-                (report_error)(stream.bot(), &e);
+                (report_error)(&bot, &e);
                 warn!("({}) telegram error: {:?}", retried, e);
                 if retried >= 13 {
                     error!("retried too many times!");

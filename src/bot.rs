@@ -173,12 +173,6 @@ pub struct UpdateStream {
     current_request: Option<PendingFuture>,
 }
 
-impl UpdateStream {
-    pub fn bot(&self) -> &Bot {
-        &self.bot
-    }
-}
-
 type PendingFuture =
     Pin<Box<dyn Future<Output = Result<Result<Vec<Update>, Error>, Elapsed>> + Send>>;
 
