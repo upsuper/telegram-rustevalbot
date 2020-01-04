@@ -1,6 +1,5 @@
 use htmlescape::encode_minimal;
 use matches::matches;
-use reqwest;
 use std::borrow::Cow;
 use std::fmt;
 use telegram_types::bot::types::{ChatType, Message};
@@ -12,26 +11,6 @@ pub enum Void {}
 impl fmt::Display for Void {
     fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
         Ok(())
-    }
-}
-
-pub fn map_reqwest_error(error: &reqwest::Error) -> &'static str {
-    if error.is_builder() {
-        "builder error"
-    } else if error.is_redirect() {
-        "failed to request"
-    } else if error.is_timeout() {
-        "timeout"
-    } else if let Some(status) = error.status() {
-        if status.is_client_error() {
-            "client error"
-        } else if status.is_server_error() {
-            "server error"
-        } else {
-            "unknown status code"
-        }
-    } else {
-        "unknown error"
     }
 }
 

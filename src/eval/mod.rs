@@ -131,7 +131,7 @@ impl EvalBot {
         &self,
         id: UpdateId,
         message: &Message,
-    ) -> Option<impl Future<Output = Result<String, &'static str>>> {
+    ) -> Option<impl Future<Output = Result<String, reqwest::Error>>> {
         // Don't care about messages not sent from a user.
         let from = message.from.as_ref()?;
         // Don't care about non-text messages.
@@ -152,9 +152,21 @@ impl EvalBot {
     }
 }
 
-fn generate_reply(reply: Result<String, &str>) -> String {
+fn generate_reply(reply: Result<String, reqwest::Error>) -> String {
     match reply {
         Ok(reply) => reply,
-        Err(err) => format!("error: {}", err),
+        Err(err) => {
+            if err.is_builder() {
+                "error: builder error".into()
+            } else if err.is_redirect() {
+                "error: failed to request".into()
+            } else if err.is_timeout() {
+                "error: timeout".into()
+            } else if let Some(status) = err.status() {
+                format!("error: status code: {}", status)
+            } else {
+                "error: unknown error".into()
+            }
+        }
     }
 }

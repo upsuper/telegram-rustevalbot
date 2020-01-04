@@ -1,7 +1,7 @@
 use super::parse::Flags;
 use crate::eval::parse::{get_help_message, Channel, Mode};
 use crate::utils;
-use futures::future::{self, TryFutureExt as _};
+use futures::future;
 use htmlescape::{encode_attribute, encode_minimal};
 use log::{debug, warn};
 use once_cell::sync::Lazy;
@@ -18,7 +18,7 @@ pub fn execute(
     content: &str,
     flags: Flags,
     is_private: bool,
-) -> Option<Pin<Box<dyn Future<Output = Result<String, &'static str>> + Send>>> {
+) -> Option<Pin<Box<dyn Future<Output = Result<String, reqwest::Error>> + Send>>> {
     if flags.help {
         Some(Box::pin(future::ok(get_help_message())))
     } else if flags.version {
@@ -33,17 +33,16 @@ pub fn execute(
 fn get_version(
     client: &Client,
     channel: Option<Channel>,
-) -> impl Future<Output = Result<String, &'static str>> {
+) -> impl Future<Output = Result<String, reqwest::Error>> {
     let url = format!(
         "https://play.rust-lang.org/meta/version/{}",
         channel.unwrap_or(Channel::Stable).as_str(),
     );
     let resp = client.get(&url).send();
-    let future = async {
+    async {
         let v: Version = resp.await?.error_for_status()?.json().await?;
         Ok(format!("rustc {} ({:.9} {})", v.version, v.hash, v.date,))
-    };
-    future.map_err(|e| utils::map_reqwest_error(&e))
+    }
 }
 
 #[derive(Deserialize)]
@@ -58,7 +57,7 @@ fn run_code(
     code: &str,
     flags: Flags,
     is_private: bool,
-) -> impl Future<Output = Result<String, &'static str>> {
+) -> impl Future<Output = Result<String, reqwest::Error>> {
     let code = generate_code_to_send(code, flags.bare);
     let channel = flags.channel.unwrap_or(Channel::Stable);
     let req = Request {
@@ -72,11 +71,10 @@ fn run_code(
     };
     const URL: &str = "https://play.rust-lang.org/execute";
     let resp = client.post(URL).json(&req).send();
-    let future = async move {
+    async move {
         let resp = resp.await?.error_for_status()?.json().await?;
         Ok(generate_result_from_response(resp, channel, is_private))
-    };
-    future.map_err(|e| utils::map_reqwest_error(&e))
+    }
 }
 
 fn generate_code_to_send(code: &str, bare: bool) -> String {
