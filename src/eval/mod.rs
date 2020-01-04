@@ -3,11 +3,11 @@ use crate::bot::Bot;
 use crate::utils;
 use futures::future;
 use log::{debug, info, warn};
-use parking_lot::Mutex;
 use reqwest::Client;
 use std::future::Future;
 use std::sync::Arc;
 use telegram_types::bot::types::{Message, Update, UpdateContent, UpdateId};
+use tokio::sync::Mutex;
 
 mod execute;
 mod parse;
@@ -17,13 +17,13 @@ mod record;
 pub struct EvalBot {
     bot: Bot,
     client: Client,
-    records: Arc<Mutex<RecordService>>,
+    records: Mutex<RecordService>,
 }
 
 impl EvalBot {
     /// Create new eval bot instance.
     pub fn new(client: Client, bot: Bot) -> Self {
-        let records = Arc::new(Mutex::new(RecordService::init()));
+        let records = Mutex::new(RecordService::init());
         info!("EvalBot authorized as @{}", bot.username);
         EvalBot {
             bot,
@@ -43,15 +43,14 @@ impl EvalBot {
     }
 
     async fn handle_message(&self, id: UpdateId, message: &Message) {
-        self.records.lock().clear_old_records(&message.date);
+        self.records.lock().await.clear_old_records(&message.date);
         let reply_future = match self.prepare_command(id, message) {
             Some(future) => async { generate_reply(future.await) },
             None => return,
         };
         let msg_id = message.message_id;
-        self.records
-            .lock()
-            .push_record(msg_id, message.date.clone());
+        let date = message.date.clone();
+        self.records.lock().await.push_record(msg_id, date);
         let chat_id = message.chat.id;
 
         // Send the placeholder reply.
@@ -62,7 +61,7 @@ impl EvalBot {
                 Ok(msg) => {
                     let reply_id = msg.message_id;
                     debug!("{}> placeholder sent as {}", id.0, reply_id.0);
-                    self.records.lock().set_reply(msg_id, reply_id);
+                    self.records.lock().await.set_reply(msg_id, reply_id);
                     Ok(reply_id)
                 }
                 Err(err) => Err(warn!("{}> error sending: {:?}", id.0, err)),
@@ -87,7 +86,7 @@ impl EvalBot {
 
     async fn handle_edit_message(&self, id: UpdateId, message: &Message) {
         let msg_id = message.message_id;
-        let reply_id = match self.records.lock().find_reply(msg_id) {
+        let reply_id = match self.records.lock().await.find_reply(msg_id) {
             Some(reply) => reply,
             None => return,
         };
@@ -97,7 +96,7 @@ impl EvalBot {
             None => {
                 // Delete reply if the new command is invalid.
                 debug!("{}> deleting", id.0);
-                self.records.lock().remove_reply(msg_id);
+                self.records.lock().await.remove_reply(msg_id);
                 let request = self.bot.delete_message(chat_id, reply_id);
                 match request.execute().await {
                     Ok(_) => debug!("{}> deleted", id.0),
