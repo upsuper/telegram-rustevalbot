@@ -115,7 +115,7 @@ otherwise bot would refuse to run.
 
 ## License
 
-Copyright (C) 2018-2019 Xidorn Quan
+Copyright (C) 2018-2020 Xidorn Quan
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by
