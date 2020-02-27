@@ -2,9 +2,9 @@ use combine::error::StringStreamError;
 use combine::parser::char::{alpha_num, space, spaces, string};
 use combine::parser::choice::choice;
 use combine::parser::combinator::attempt;
-use combine::parser::item::eof;
 use combine::parser::range::recognize;
 use combine::parser::repeat::{many, skip_many1};
+use combine::parser::token::eof;
 use combine::parser::Parser;
 use serde::Serialize;
 use std::fmt::Write as _;
@@ -14,7 +14,7 @@ pub fn parse_command(command: &str) -> Option<(Flags, &str)> {
     let flag_name = recognize(skip_many1(alpha_num()));
     let flag = (spaces1(), string("--"), flag_name).map(|(_, _, name)| name);
     let mut parser = string("/eval")
-        .with(many::<FlagsBuilder, _>(attempt(flag)))
+        .with(many::<FlagsBuilder, _, _>(attempt(flag)))
         .skip(choice((spaces1(), eof())))
         .and_then(|builder| {
             if builder.error {

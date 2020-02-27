@@ -8,7 +8,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
-combine = "3.6.0"
+combine = "4.0.1"
 dotenv = "0.15.0"
 env_logger = "0.7.0"
 derive_more = "0.99.2"

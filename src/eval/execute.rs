@@ -205,15 +205,15 @@ fn extract_code_headers(code: &str) -> (&str, &str) {
     use combine::parser::char::{alpha_num, space, spaces, string};
     use combine::parser::choice::choice;
     use combine::parser::combinator::{attempt, ignore};
-    use combine::parser::item::{item, none_of};
     use combine::parser::range::recognize;
     use combine::parser::repeat::{skip_many, skip_many1};
+    use combine::parser::token::{none_of, token};
     use combine::parser::Parser;
     use std::iter::once;
     let spaces1 = || (space(), spaces());
-    let attr_content = || (item('['), skip_many(none_of(once(']'))), item(']'));
-    let outer_attr = (item('#'), spaces(), attr_content());
-    let inner_attr = (item('#'), spaces(), item('!'), spaces(), attr_content());
+    let attr_content = || (token('['), skip_many(none_of(once(']'))), token(']'));
+    let outer_attr = (token('#'), spaces(), attr_content());
+    let inner_attr = (token('#'), spaces(), token('!'), spaces(), attr_content());
     let extern_crate = (
         skip_many(outer_attr),
         spaces(),
@@ -221,9 +221,9 @@ fn extract_code_headers(code: &str) -> (&str, &str) {
         spaces1(),
         string("crate"),
         spaces1(),
-        skip_many1(choice((alpha_num(), item('_')))),
+        skip_many1(choice((alpha_num(), token('_')))),
         spaces(),
-        item(';'),
+        token(';'),
     );
     let mut header = recognize((
         spaces(),
