@@ -71,7 +71,7 @@ async fn run_code(
 }
 
 fn generate_code_to_send(code: &str, bare: bool) -> String {
-    if bare {
+    if bare || code.find("fn main()").is_some() {
         return code.to_string();
     }
     macro_rules! template {
