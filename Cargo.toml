@@ -1,6 +1,6 @@
 [package]
 name = "telegram-rustevalbot"
-version = "0.4.10"
+version = "0.4.11"
 authors = ["Xidorn Quan <me@upsuper.org>"]
 license = "AGPL-3.0-or-later"
 homepage = "https://github.com/upsuper/telegram-rustevalbot"
@@ -16,7 +16,7 @@ fst = "0.3"
 fst-subseq-ascii-caseless = "0.1"
 futures = "0.3.1"
 htmlescape = "0.3"
-itertools = "0.8.0"
+itertools = "0.9.0"
 log = "0.4"
 notify = "4.0"
 parking_lot = "0.10.0"
