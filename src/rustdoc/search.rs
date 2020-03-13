@@ -1,5 +1,4 @@
 use fst_subseq_ascii_caseless::SubseqAsciiCaseless;
-use matches::matches;
 use once_cell::sync::Lazy;
 use rustdoc_seeker::{DocItem, RustDoc, RustDocSeeker, TypeItem};
 use std::fs;

@@ -1,5 +1,4 @@
 use htmlescape::encode_minimal;
-use matches::matches;
 use std::borrow::Cow;
 use std::fmt;
 use telegram_types::bot::types::{ChatType, Message};
