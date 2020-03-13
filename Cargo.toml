@@ -1,6 +1,6 @@
 [package]
 name = "telegram-rustevalbot"
-version = "0.4.11"
+version = "0.4.12"
 authors = ["Xidorn Quan <me@upsuper.org>"]
 license = "AGPL-3.0-or-later"
 homepage = "https://github.com/upsuper/telegram-rustevalbot"
@@ -12,7 +12,7 @@ combine = "4.0.1"
 dotenv = "0.15.0"
 env_logger = "0.7.0"
 derive_more = "0.99.2"
-fst = "0.3"
+fst = "0.4.0"
 fst-subseq-ascii-caseless = "0.1"
 futures = "0.3.1"
 htmlescape = "0.3"
@@ -22,7 +22,7 @@ notify = "4.0"
 parking_lot = "0.10.0"
 once_cell = "1.2.0"
 regex = "1.0"
-rustdoc-seeker = "0.5.1"
+rustdoc-seeker = "0.6.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.8.0"
@@ -43,4 +43,4 @@ features = ["rt-core", "rt-threaded", "sync"]
 signal-hook = "0.1.5"
 
 [dev-dependencies]
-string_cache = "0.7"
+string_cache = "0.8.0"
