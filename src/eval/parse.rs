@@ -1,29 +1,47 @@
 use combine::error::StringStreamError;
 use combine::parser::char::{alpha_num, space, spaces, string};
-use combine::parser::choice::choice;
+use combine::parser::choice::{choice, optional};
 use combine::parser::combinator::attempt;
 use combine::parser::range::recognize;
 use combine::parser::repeat::{many, skip_many1};
-use combine::parser::token::eof;
+use combine::parser::token::{eof, token};
 use combine::parser::Parser;
 use serde::Serialize;
 use std::fmt::Write as _;
 
-pub fn parse_command(command: &str) -> Option<(Flags, &str)> {
+#[derive(Debug, Eq, PartialEq)]
+pub struct Command<'a> {
+    pub bot_name: Option<&'a str>,
+    pub flags: Flags,
+    pub content: &'a str,
+}
+
+pub fn parse_command(command: &str) -> Option<Command<'_>> {
+    let bot_name = token('@').with(recognize(skip_many1(choice((alpha_num(), token('_'))))));
     let spaces1 = || (space(), spaces()).map(|_| ());
     let flag_name = recognize(skip_many1(alpha_num()));
     let flag = (spaces1(), string("--"), flag_name).map(|(_, _, name)| name);
     let mut parser = string("/eval")
-        .with(many::<FlagsBuilder, _, _>(attempt(flag)))
+        .with((
+            optional(bot_name),
+            many::<FlagsBuilder, _, _>(attempt(flag)),
+        ))
         .skip(choice((spaces1(), eof())))
-        .and_then(|builder| {
+        .and_then(|(bot_name, builder)| {
             if builder.error {
                 Err(StringStreamError::UnexpectedParse)
             } else {
-                Ok(builder.flags)
+                Ok((bot_name, builder.flags))
             }
         });
-    parser.parse(command).ok()
+    parser
+        .parse(command)
+        .ok()
+        .map(|((bot_name, flags), content)| Command {
+            bot_name,
+            flags,
+            content,
+        })
 }
 
 pub fn get_help_message() -> String {
@@ -152,7 +170,7 @@ impl Channel {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_command, Channel, Flags, Mode};
+    use super::{parse_command, Channel, Command, Flags, Mode};
 
     #[test]
     fn unknown_command() {
@@ -161,14 +179,25 @@ mod tests {
 
     #[test]
     fn command_with_nothing() {
-        assert_eq!(parse_command("/eval"), Some((Flags::default(), "")));
+        assert_eq!(
+            parse_command("/eval"),
+            Some(Command {
+                bot_name: None,
+                flags: Flags::default(),
+                content: ""
+            })
+        );
     }
 
     #[test]
     fn command_with_content() {
         assert_eq!(
             parse_command("/eval something after"),
-            Some((Flags::default(), "something after"))
+            Some(Command {
+                bot_name: None,
+                flags: Flags::default(),
+                content: "something after"
+            })
         );
     }
 
@@ -176,7 +205,11 @@ mod tests {
     fn command_with_content_newline() {
         assert_eq!(
             parse_command("/eval\nsome content"),
-            Some((Flags::default(), "some content")),
+            Some(Command {
+                bot_name: None,
+                flags: Flags::default(),
+                content: "some content"
+            }),
         );
     }
 
@@ -199,7 +232,11 @@ mod tests {
             };
             assert_eq!(
                 parse_command(&format!("/eval --{}", name)),
-                Some((expected_flags, "")),
+                Some(Command {
+                    bot_name: None,
+                    flags: expected_flags,
+                    content: ""
+                }),
             );
         }
     }
@@ -214,7 +251,11 @@ mod tests {
             };
             assert_eq!(
                 parse_command(&format!("/eval --{}", edition)),
-                Some((expected_flags, "")),
+                Some(Command {
+                    bot_name: None,
+                    flags: expected_flags,
+                    content: ""
+                }),
             );
         }
     }
@@ -229,7 +270,11 @@ mod tests {
             };
             assert_eq!(
                 parse_command(&format!("/eval --{}", name)),
-                Some((expected_flags, "")),
+                Some(Command {
+                    bot_name: None,
+                    flags: expected_flags,
+                    content: ""
+                }),
             );
         }
     }
@@ -240,7 +285,14 @@ mod tests {
             bare: true,
             ..Flags::default()
         };
-        assert_eq!(parse_command("/eval --bare"), Some((expected_flags, "")),);
+        assert_eq!(
+            parse_command("/eval --bare"),
+            Some(Command {
+                bot_name: None,
+                flags: expected_flags,
+                content: ""
+            }),
+        );
     }
 
     #[test]
@@ -249,7 +301,14 @@ mod tests {
             version: true,
             ..Flags::default()
         };
-        assert_eq!(parse_command("/eval --version"), Some((expected_flags, "")));
+        assert_eq!(
+            parse_command("/eval --version"),
+            Some(Command {
+                bot_name: None,
+                flags: expected_flags,
+                content: ""
+            })
+        );
     }
 
     #[test]
@@ -258,7 +317,14 @@ mod tests {
             help: true,
             ..Flags::default()
         };
-        assert_eq!(parse_command("/eval --help"), Some((expected_flags, "")));
+        assert_eq!(
+            parse_command("/eval --help"),
+            Some(Command {
+                bot_name: None,
+                flags: expected_flags,
+                content: ""
+            })
+        );
     }
 
     #[test]
@@ -279,7 +345,26 @@ mod tests {
         };
         assert_eq!(
             parse_command(input),
-            Some((expected_flags, "rest\ncontent"))
+            Some(Command {
+                bot_name: None,
+                flags: expected_flags,
+                content: "rest\ncontent"
+            })
+        );
+    }
+
+    #[test]
+    fn bot_name() {
+        assert_eq!(
+            parse_command("/eval@bot --bare content"),
+            Some(Command {
+                bot_name: Some("bot"),
+                flags: Flags {
+                    bare: true,
+                    ..Flags::default()
+                },
+                content: "content",
+            })
         );
     }
 }

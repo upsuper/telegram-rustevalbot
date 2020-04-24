@@ -1,5 +1,6 @@
 use self::record::RecordService;
 use crate::bot::Bot;
+use crate::eval::parse::Command;
 use crate::utils;
 use futures::future;
 use log::{debug, info, warn};
@@ -147,7 +148,16 @@ impl EvalBot {
             command
         );
         let is_private = utils::is_message_from_private_chat(&message);
-        let (flags, content) = parse::parse_command(&command)?;
+        let Command {
+            bot_name,
+            flags,
+            content,
+        } = parse::parse_command(&command)?;
+        if let Some(name) = bot_name {
+            if name != self.bot.username {
+                return None;
+            }
+        }
         execute::execute(&self.client, content, flags, is_private)
     }
 }
