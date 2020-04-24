@@ -1,6 +1,5 @@
 use log::error;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io;

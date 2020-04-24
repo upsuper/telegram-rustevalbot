@@ -69,11 +69,10 @@ struct QueryPath<'a> {
 }
 
 fn split_path<'a>(path: &'a [&'a str]) -> Option<QueryPath<'a>> {
-    let (root, path) = match path.split_first()? {
-        (root, p) => match RootLevel::from_str(root) {
-            Some(r) => (r, p),
-            None => (RootLevel::Std, path),
-        },
+    let (root, remaining) = path.split_first()?;
+    let (root, path) = match RootLevel::from_str(root) {
+        Some(root) => (root, remaining),
+        None => (RootLevel::Std, path),
     };
     let (name, path) = path.split_last()?;
     Some(QueryPath { root, path, name })

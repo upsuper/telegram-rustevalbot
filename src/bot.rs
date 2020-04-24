@@ -2,7 +2,6 @@ use derive_more::From;
 use futures::future::TryFutureExt as _;
 use futures::stream::{self, Stream};
 use log::debug;
-use reqwest;
 use reqwest::{Client, Request};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;

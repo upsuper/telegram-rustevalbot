@@ -65,7 +65,10 @@ impl EvalBot {
                     self.records.lock().await.set_reply(msg_id, reply_id);
                     Ok(reply_id)
                 }
-                Err(err) => Err(warn!("{}> error sending: {:?}", id.0, err)),
+                Err(err) => {
+                    warn!("{}> error sending: {:?}", id.0, err);
+                    Err(())
+                }
             }
         };
 
