@@ -244,15 +244,12 @@ static PRELUDES: Lazy<String> = Lazy::new(get_preludes);
 fn get_preludes() -> String {
     const LIST: &[&str] = &[
         "lazy_static::lazy_static",
-        "std::{f32, f64}",
-        "std::{i8, i16, i32, i64, i128, isize}",
         "std::{str, slice}",
-        "std::{u8, u16, u32, u64, u128, usize}",
         "std::borrow::Cow",
         "std::cell::{Cell, RefCell, UnsafeCell}",
         "std::char",
         "std::cmp::{Eq, Ord, PartialEq, PartialOrd, max, min}",
-        "std::collections::{HashMap, HashSet}",
+        "std::collections::{BTreeMap, BTreeSet, HashMap, HashSet}",
         "std::ffi::{CStr, CString, OsStr, OsString}",
         "std::fmt::{self, Debug, Display, Formatter}",
         "std::fs::File",
@@ -264,7 +261,7 @@ fn get_preludes() -> String {
         "std::path::{Path, PathBuf}",
         "std::ptr::NonNull",
         "std::rc::Rc",
-        "std::sync::Arc",
+        "std::sync::{Arc, Mutex, RwLock}",
     ];
 
     let mut result = String::new();
