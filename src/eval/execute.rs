@@ -259,9 +259,12 @@ fn get_preludes() -> String {
         "std::mem::{MaybeUninit, replace, size_of, swap, transmute}",
         "std::ops::*",
         "std::path::{Path, PathBuf}",
-        "std::ptr::NonNull",
+        "std::ptr::{NonNull, null, null_mut}",
         "std::rc::Rc",
         "std::sync::{Arc, Mutex, RwLock}",
+        "std::sync::atomic::{self, AtomicBool, AtomicPtr}",
+        "std::sync::atomic::{AtomicI8, AtomicI16, AtomicI32, AtomicI64, AtomicIsize}",
+        "std::sync::atomic::{AtomicU8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize}",
     ];
 
     let mut result = String::new();
