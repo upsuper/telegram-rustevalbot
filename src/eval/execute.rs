@@ -9,7 +9,6 @@ use regex::{Captures, Regex};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::fmt::Write;
 use std::future::Future;
 
 pub fn execute<'p>(
@@ -97,6 +96,7 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
     format!(
         template! {
             "#![allow(unreachable_code)]",
+            "#![allow(unused_imports)]",
             "{header}",
             "{preludes}",
             "fn main() -> Result<(), Box<dyn std::error::Error>> {{",
@@ -243,33 +243,36 @@ static PRELUDES: Lazy<String> = Lazy::new(get_preludes);
 
 fn get_preludes() -> String {
     const LIST: &[&str] = &[
-        "lazy_static::lazy_static",
-        "std::{str, slice}",
-        "std::borrow::Cow",
-        "std::cell::{Cell, RefCell, UnsafeCell}",
-        "std::char",
-        "std::cmp::{Eq, Ord, PartialEq, PartialOrd, max, min}",
-        "std::collections::{BTreeMap, BTreeSet, HashMap, HashSet}",
-        "std::ffi::{CStr, CString, OsStr, OsString}",
-        "std::fmt::{self, Debug, Display, Formatter}",
-        "std::fs::File",
-        "std::io",
-        "std::io::prelude::*",
-        "std::marker::PhantomData",
-        "std::mem::{MaybeUninit, replace, size_of, swap, transmute}",
-        "std::ops::*",
-        "std::path::{Path, PathBuf}",
-        "std::ptr::{NonNull, null, null_mut}",
-        "std::rc::Rc",
-        "std::sync::{Arc, Mutex, RwLock}",
-        "std::sync::atomic::{self, AtomicBool, AtomicPtr}",
-        "std::sync::atomic::{AtomicI8, AtomicI16, AtomicI32, AtomicI64, AtomicIsize}",
-        "std::sync::atomic::{AtomicU8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize}",
+        "use lazy_static::lazy_static;",
+        "use std::{str, slice};",
+        "use std::any::{Any, type_name};",
+        "use std::borrow::Cow;",
+        "use std::cell::{Cell, RefCell, UnsafeCell};",
+        "use std::char;",
+        "use std::cmp::{Eq, Ord, PartialEq, PartialOrd, max, min};",
+        "use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};",
+        "use std::ffi::{CStr, CString, OsStr, OsString};",
+        "use std::fmt::{self, Debug, Display, Formatter};",
+        "use std::fs::File;",
+        "use std::io;",
+        "use std::io::prelude::*;",
+        "use std::marker::PhantomData;",
+        "use std::mem::{MaybeUninit, replace, size_of, swap, transmute};",
+        "use std::ops::*;",
+        "use std::path::{Path, PathBuf};",
+        "use std::ptr::{NonNull, null, null_mut};",
+        "use std::rc::Rc;",
+        "use std::sync::{Arc, Mutex, RwLock};",
+        "use std::sync::atomic::{self, AtomicBool, AtomicPtr};",
+        "use std::sync::atomic::{AtomicI8, AtomicI16, AtomicI32, AtomicI64, AtomicIsize};",
+        "use std::sync::atomic::{AtomicU8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize};",
+        "fn type_name_of_val<T: ?Sized>(_: &T) -> &'static str { type_name::<T>() }",
     ];
 
     let mut result = String::new();
     for item in LIST {
-        writeln!(&mut result, "#[allow(unused_imports)] use {};", item).unwrap();
+        result.push_str(item);
+        result.push('\n');
     }
     result
 }
