@@ -257,7 +257,7 @@ fn get_preludes() -> String {
         "use std::io;",
         "use std::io::prelude::*;",
         "use std::marker::PhantomData;",
-        "use std::mem::{MaybeUninit, replace, size_of, swap, transmute};",
+        "use std::mem::{MaybeUninit, replace, size_of, size_of_val, swap, transmute};",
         "use std::ops::*;",
         "use std::path::{Path, PathBuf};",
         "use std::ptr::{NonNull, null, null_mut};",
