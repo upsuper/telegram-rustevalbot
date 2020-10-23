@@ -244,7 +244,7 @@ static PRELUDES: Lazy<String> = Lazy::new(get_preludes);
 fn get_preludes() -> String {
     const LIST: &[&str] = &[
         "use lazy_static::lazy_static;",
-        "use std::{str, slice};",
+        "use once_cell::sync::Lazy;",
         "use std::any::{Any, type_name};",
         "use std::borrow::Cow;",
         "use std::cell::{Cell, RefCell, UnsafeCell};",
@@ -256,6 +256,7 @@ fn get_preludes() -> String {
         "use std::fs::File;",
         "use std::io;",
         "use std::io::prelude::*;",
+        "use std::iter;",
         "use std::marker::PhantomData;",
         "use std::mem::{ManuallyDrop, MaybeUninit};",
         "use std::mem::{align_of, align_of_val, size_of, size_of_val, needs_drop};",
@@ -264,6 +265,8 @@ fn get_preludes() -> String {
         "use std::path::{Path, PathBuf};",
         "use std::ptr::{NonNull, null, null_mut};",
         "use std::rc::Rc;",
+        "use std::slice;",
+        "use std::str;",
         "use std::sync::{Arc, Mutex, RwLock};",
         "use std::sync::atomic::{self, AtomicBool, AtomicPtr};",
         "use std::sync::atomic::{AtomicI8, AtomicI16, AtomicI32, AtomicI64, AtomicIsize};",
