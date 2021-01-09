@@ -13,7 +13,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use telegram_types::bot::types::{Update, UpdateContent};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 pub struct BotRunner<'a> {
     pub client: &'a Client,
@@ -95,11 +95,9 @@ async fn run_bot<Impl, Handler, HandleResult>(
     let mut retried = 0;
     let mut delay = None;
     loop {
-        if let Some(delay) = &mut delay {
+        if let Some(delay) = delay.take() {
             delay.await;
         }
-        delay = None;
-
         match stream.next().await {
             None => unreachable!("update stream never ends"),
             Some(Ok(update)) => {
@@ -117,7 +115,7 @@ async fn run_bot<Impl, Handler, HandleResult>(
                     break;
                 } else {
                     let delay_duration = Duration::from_secs(1 << retried);
-                    delay = Some(delay_for(delay_duration));
+                    delay = Some(sleep(delay_duration));
                     retried += 1;
                 }
             }

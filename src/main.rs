@@ -59,7 +59,7 @@ fn main() {
 
     info!("Running as `{}`", env!("USER_AGENT"));
 
-    let mut runtime = Runtime::new().unwrap();
+    let runtime = Runtime::new().unwrap();
     let (spawner, waiter) = task_tracker::create(&runtime);
     let client = build_client();
     let bot_runner = BotRunner {
