@@ -546,6 +546,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37d572918e350e82412fe766d24b15e6682fb2ed2bbe018280caa810397cb319"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -973,7 +982,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70ccc41fbea5d744fe67db8255976d59e58c799068c613d2b95f08623e862435"
 dependencies = [
  "fst",
- "itertools",
+ "itertools 0.9.0",
  "serde",
  "serde_json",
  "string_cache",
@@ -1170,7 +1179,7 @@ dependencies = [
  "fst-subseq-ascii-caseless",
  "futures",
  "htmlescape",
- "itertools",
+ "itertools 0.10.0",
  "log",
  "notify",
  "once_cell",
