@@ -40,7 +40,7 @@ version = "1"
 features = ["rt", "rt-multi-thread", "sync", "time"]
 
 [target.'cfg(unix)'.dependencies]
-signal-hook = "0.1.5"
+signal-hook = "0.3.7"
 
 [dev-dependencies]
 string_cache = "0.8.0"
