@@ -262,6 +262,8 @@ fn get_preludes() -> String {
         "use std::mem::{ManuallyDrop, MaybeUninit};",
         "use std::mem::{align_of, align_of_val, size_of, size_of_val, needs_drop};",
         "use std::mem::{forget, replace, swap, take, transmute, transmute_copy};",
+        "use std::num::{NonZeroI8, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI128, NonZeroIsize};",
+        "use std::num::{NonZeroU8, NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU128, NonZeroUsize};",
         "use std::ops::*;",
         "use std::path::{Path, PathBuf};",
         "use std::ptr::{NonNull, null, null_mut};",
