@@ -10,7 +10,7 @@ use telegram_types::bot::inline_mode::{
     InlineQueryResult, InlineQueryResultArticle, InputMessageContent, InputTextMessageContent,
     ResultId,
 };
-use telegram_types::bot::types::{ParseMode, Update, UpdateContent};
+use telegram_types::bot::types::{ParseMode, UpdateContent, UpdateId};
 
 mod search;
 
@@ -26,8 +26,8 @@ impl RustdocBot {
         RustdocBot { bot }
     }
 
-    pub async fn handle_update(self: Arc<Self>, update: Update) {
-        let query = match update.content {
+    pub async fn handle_update(self: Arc<Self>, _: UpdateId, content: UpdateContent) {
+        let query = match content {
             UpdateContent::InlineQuery(query) => query,
             _ => return,
         };

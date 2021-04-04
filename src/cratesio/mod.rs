@@ -12,8 +12,8 @@ use telegram_types::bot::inline_mode::{
     ResultId,
 };
 use telegram_types::bot::types::{
-    InlineKeyboardButton, InlineKeyboardButtonPressed, InlineKeyboardMarkup, ParseMode, Update,
-    UpdateContent,
+    InlineKeyboardButton, InlineKeyboardButtonPressed, InlineKeyboardMarkup, ParseMode,
+    UpdateContent, UpdateId,
 };
 use url::Url;
 
@@ -28,8 +28,8 @@ impl CratesioBot {
         CratesioBot { client, bot }
     }
 
-    pub async fn handle_update(self: Arc<Self>, update: Update) {
-        let query = match update.content {
+    pub async fn handle_update(self: Arc<Self>, _: UpdateId, content: UpdateContent) {
+        let query = match content {
             UpdateContent::InlineQuery(query) => query,
             _ => return,
         };

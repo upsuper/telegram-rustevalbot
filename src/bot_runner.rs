@@ -12,7 +12,7 @@ use std::env::{self, VarError};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
-use telegram_types::bot::types::{Update, UpdateContent};
+use telegram_types::bot::types::{Update, UpdateContent, UpdateId};
 use tokio::time::sleep;
 
 pub struct BotRunner<'a> {
@@ -33,7 +33,7 @@ impl<'a> BotRunner<'a> {
     where
         Impl: Send + Sync + 'static,
         Creator: (FnOnce(Bot) -> Impl) + Send + 'static,
-        Handler: (Fn(Arc<Impl>, Update) -> HandleResult) + Send + Sync + 'static,
+        Handler: (Fn(Arc<Impl>, UpdateId, UpdateContent) -> HandleResult) + Send + Sync + 'static,
         HandleResult: Future<Output = ()> + Send + 'static,
     {
         let (sender, receiver) = channel();
@@ -88,7 +88,7 @@ async fn run_bot<Impl, Handler, HandleResult>(
     shutdown: Arc<Shutdown>,
     report_error: fn(&Bot, &Error),
 ) where
-    Handler: Fn(Arc<Impl>, Update) -> HandleResult,
+    Handler: Fn(Arc<Impl>, UpdateId, UpdateContent) -> HandleResult,
     HandleResult: Future<Output = ()> + Send + 'static,
 {
     pin_mut!(stream);
@@ -100,11 +100,11 @@ async fn run_bot<Impl, Handler, HandleResult>(
         }
         match stream.next().await {
             None => unreachable!("update stream never ends"),
-            Some(Ok(update)) => {
+            Some(Ok(Update { update_id, content })) => {
                 retried = 0;
-                debug!("{}> handling", update.update_id.0);
-                if !may_handle_common_command(&update, bot, &spawner, &shutdown) {
-                    spawner.spawn((handle_update)(bot_impl.clone(), update));
+                debug!("{}> handling", update_id.0);
+                if !may_handle_common_command(update_id, &content, bot, &spawner, &shutdown) {
+                    spawner.spawn((handle_update)(bot_impl.clone(), update_id, content));
                 }
             }
             Some(Err(e)) => {
@@ -124,12 +124,13 @@ async fn run_bot<Impl, Handler, HandleResult>(
 }
 
 fn may_handle_common_command(
-    update: &Update,
+    update_id: UpdateId,
+    content: &UpdateContent,
     bot: &Bot,
     spawner: &Arc<TaskSpawner>,
     shutdown: &Shutdown,
 ) -> bool {
-    let message = match &update.content {
+    let message = match &content {
         UpdateContent::Message(message) => message,
         _ => return false,
     };
@@ -141,7 +142,6 @@ fn may_handle_common_command(
         _ => return false,
     };
     let chat_id = message.chat.id;
-    let update_id = update.update_id;
     let send_reply = |text: &str| {
         let future = bot.send_message(chat_id, text).execute();
         spawner.spawn(async move {

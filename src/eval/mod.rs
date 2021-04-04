@@ -7,7 +7,7 @@ use log::{debug, info, warn};
 use reqwest::Client;
 use std::future::Future;
 use std::sync::Arc;
-use telegram_types::bot::types::{Message, Update, UpdateContent, UpdateId};
+use telegram_types::bot::types::{Message, UpdateContent, UpdateId};
 use tokio::sync::Mutex;
 
 mod execute;
@@ -34,9 +34,8 @@ impl EvalBot {
     }
 
     /// Handle the update.
-    pub async fn handle_update(self: Arc<Self>, update: Update) {
-        let id = update.update_id;
-        match update.content {
+    pub async fn handle_update(self: Arc<Self>, id: UpdateId, content: UpdateContent) {
+        match content {
             UpdateContent::Message(message) => self.handle_message(id, &message).await,
             UpdateContent::EditedMessage(message) => self.handle_edit_message(id, &message).await,
             _ => {}
