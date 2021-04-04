@@ -1123,7 +1123,7 @@ dependencies = [
 
 [[package]]
 name = "telegram-rustevalbot"
-version = "0.4.20"
+version = "0.4.21"
 dependencies = [
  "combine",
  "derive_more",
@@ -1154,9 +1154,9 @@ dependencies = [
 
 [[package]]
 name = "telegram_types"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89fd41ee8d3078d66dbe24efe488469eda5c2df5d90cffb4f7c34ddb9c200622"
+checksum = "65fbbd3682676950376d87d8d1a4c1b49dd76d214156bfb43290faf3eaade91b"
 dependencies = [
  "serde",
  "serde_derive",

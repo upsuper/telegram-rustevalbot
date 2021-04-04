@@ -103,6 +103,7 @@ async fn run_bot<Impl, Handler, HandleResult>(
             Some(Ok(Update { update_id, content })) => {
                 retried = 0;
                 debug!("{}> handling", update_id.0);
+                let content = content.unwrap_or_default();
                 if !may_handle_common_command(update_id, &content, bot, &spawner, &shutdown) {
                     spawner.spawn((handle_update)(bot_impl.clone(), update_id, content));
                 }
