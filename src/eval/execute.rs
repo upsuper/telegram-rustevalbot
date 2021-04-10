@@ -255,6 +255,7 @@ fn get_preludes() -> String {
         "use std::ffi::{CStr, CString, OsStr, OsString};",
         "use std::fmt::{self, Debug, Display, Formatter};",
         "use std::fs::File;",
+        "use std::hint::unreachable_unchecked;",
         "use std::io;",
         "use std::io::prelude::*;",
         "use std::iter::{self, FromIterator};",
