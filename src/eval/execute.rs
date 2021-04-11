@@ -72,7 +72,7 @@ async fn run_code(
 const PRELUDE: &str = include_str!("prelude.res.rs");
 
 fn generate_code_to_send(code: &str, bare: bool) -> String {
-    if bare || code.find("fn main()").is_some() {
+    if bare || code.contains("fn main()") {
         return code.to_string();
     }
     macro_rules! template {
