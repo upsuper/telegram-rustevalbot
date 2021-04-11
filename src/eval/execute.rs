@@ -69,6 +69,8 @@ async fn run_code(
     Ok(generate_result_from_response(resp, channel, is_private))
 }
 
+const PRELUDE: &str = include_str!("prelude.res.rs");
+
 fn generate_code_to_send(code: &str, bare: bool) -> String {
     if bare || code.find("fn main()").is_some() {
         return code.to_string();
@@ -98,14 +100,14 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
             "#![allow(dead_code)]",
             "#![allow(unused_imports)]",
             "{header}",
-            "{preludes}",
+            "{prelude}",
             "fn main() -> Result<(), Box<dyn std::error::Error>> {{",
             "    {code};",
             "    Ok(())",
             "}}",
         },
         header = header,
-        preludes = &*PRELUDES,
+        prelude = PRELUDE,
         code = code,
     )
 }
@@ -237,53 +239,6 @@ fn extract_code_headers(code: &str) -> (&str, &str) {
         warn!("failed to split code: {}", code);
         ("", code)
     })
-}
-
-static PRELUDES: Lazy<String> = Lazy::new(get_preludes);
-
-fn get_preludes() -> String {
-    const LIST: &[&str] = &[
-        "use lazy_static::lazy_static;",
-        "use once_cell::sync::Lazy;",
-        "use std::any::{Any, type_name};",
-        "use std::borrow::Cow;",
-        "use std::cell::{Cell, RefCell, UnsafeCell};",
-        "use std::char;",
-        "use std::cmp::{Eq, Ord, PartialEq, PartialOrd, max, min};",
-        "use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};",
-        "use std::convert::{TryFrom, TryInto};",
-        "use std::ffi::{CStr, CString, OsStr, OsString};",
-        "use std::fmt::{self, Debug, Display, Formatter};",
-        "use std::fs::File;",
-        "use std::hint::unreachable_unchecked;",
-        "use std::io;",
-        "use std::io::prelude::*;",
-        "use std::iter::{self, FromIterator};",
-        "use std::marker::PhantomData;",
-        "use std::mem::{ManuallyDrop, MaybeUninit};",
-        "use std::mem::{align_of, align_of_val, size_of, size_of_val, needs_drop};",
-        "use std::mem::{forget, replace, swap, take, transmute, transmute_copy};",
-        "use std::num::{NonZeroI8, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI128, NonZeroIsize};",
-        "use std::num::{NonZeroU8, NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU128, NonZeroUsize};",
-        "use std::ops::*;",
-        "use std::path::{Path, PathBuf};",
-        "use std::ptr::{NonNull, null, null_mut};",
-        "use std::rc::Rc;",
-        "use std::slice;",
-        "use std::str;",
-        "use std::sync::{Arc, Mutex, RwLock};",
-        "use std::sync::atomic::{self, AtomicBool, AtomicPtr};",
-        "use std::sync::atomic::{AtomicI8, AtomicI16, AtomicI32, AtomicI64, AtomicIsize};",
-        "use std::sync::atomic::{AtomicU8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize};",
-        "fn type_name_of_val<T: ?Sized>(_: &T) -> &'static str { type_name::<T>() }",
-    ];
-
-    let mut result = String::new();
-    for item in LIST {
-        result.push_str(item);
-        result.push('\n');
-    }
-    result
 }
 
 #[cfg(test)]
