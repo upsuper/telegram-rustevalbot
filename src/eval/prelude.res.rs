@@ -22,7 +22,7 @@ use std::num::{NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZe
 use std::num::{NonZeroU128, NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize};
 use std::ops::*;
 use std::path::{Path, PathBuf};
-use std::ptr::{null, null_mut, NonNull};
+use std::ptr::{self, addr_of, addr_of_mut, null, null_mut, NonNull};
 use std::rc::Rc;
 use std::slice;
 use std::str;
