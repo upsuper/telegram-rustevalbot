@@ -111,7 +111,7 @@ fn main() {
         ])
         .await
         .unwrap();
-        let bots = bots.into_iter().filter_map(|info| info).collect_vec();
+        let bots = bots.into_iter().flatten().collect_vec();
         let mut start_msg = format!("Start version: {}", env!("VERSION"));
         for (name, bot) in bots.iter() {
             write!(&mut start_msg, "\nbot {} @{}", name, bot.username).unwrap();
