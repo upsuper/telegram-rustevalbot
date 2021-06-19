@@ -1,6 +1,6 @@
 # Telegram Rust eval bot
 
-[![Build Status](https://api.travis-ci.org/upsuper/telegram-rustevalbot.svg?branch=master)](https://travis-ci.org/upsuper/telegram-rustevalbot)
+[![Build Status](https://github.com/upsuper/telegram-rustevalbot/actions/workflows/check.yml/badge.svg)](https://github.com/upsuper/telegram-rustevalbot/actions/workflows/check.yml)
 
 This bot program handles Eval bot and Crates.io bot.
 
