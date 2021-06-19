@@ -1,5 +1,6 @@
 mkdir -m0700 /tmp/rustevalbot
 git rev-parse HEAD > /tmp/rustevalbot/upgrade
+mkdir -p -m0700 $HOME/.ssh
 cat server_ssh_key >> $HOME/.ssh/known_hosts
 echo "$DEPLOY_KEY" > /tmp/rustevalbot/deploy_key
 sftp -i /tmp/rustevalbot/deploy_key \
