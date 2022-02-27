@@ -212,7 +212,7 @@ fn may_recover_from_error(error: &Error) -> Option<UpdateId> {
         Error::Parse(ParseError { data, .. }) => data,
         _ => return None,
     };
-    let value = match serde_json::from_slice::<JsonValue>(&data) {
+    let value = match serde_json::from_slice::<JsonValue>(data) {
         Ok(value) => value,
         Err(_) => return None,
     };

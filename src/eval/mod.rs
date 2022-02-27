@@ -149,12 +149,12 @@ impl EvalBot {
             message.message_id.0,
             command
         );
-        let is_private = utils::is_message_from_private_chat(&message);
+        let is_private = utils::is_message_from_private_chat(message);
         let Command {
             bot_name,
             flags,
             content,
-        } = parse::parse_command(&command)?;
+        } = parse::parse_command(command)?;
         if let Some(name) = bot_name {
             if name != self.bot.username {
                 return None;
