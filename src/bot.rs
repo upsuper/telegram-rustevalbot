@@ -42,7 +42,7 @@ impl Bot {
         Ok(Bot { username, ..bot })
     }
 
-    pub fn get_updates(&self) -> impl Stream<Item = Result<Update, Error>> + '_ {
+    pub fn get_updates(&self) -> impl Stream<Item = Result<Option<Update>, Error>> + '_ {
         #[derive(Default)]
         struct Data {
             update_id: Option<UpdateId>,
@@ -58,7 +58,7 @@ impl Bot {
                 let result = loop {
                     if let Some(update) = data.buffer.pop_front() {
                         debug!("{}: {:?}", self.username, update);
-                        break Ok(update);
+                        break Ok(Some(update));
                     }
                     let mut get_updates = GetUpdates::new();
                     if let Some(update_id) = data.update_id {
@@ -84,7 +84,9 @@ impl Bot {
                             break Err(err);
                         }
                         Err(_elapsed) => {
-                            // Timeout, loop back and do a new one.
+                            // Timeout. Yield an empty result so that the caller knows that we have
+                            // finished another wait.
+                            break Ok(None);
                         }
                     }
                 };

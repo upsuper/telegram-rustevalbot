@@ -81,7 +81,7 @@ impl<'a> BotRunner<'a> {
 
 async fn run_bot<Impl, Handler, HandleResult>(
     bot: &Bot,
-    stream: impl Stream<Item = Result<Update, Error>>,
+    stream: impl Stream<Item = Result<Option<Update>, Error>>,
     bot_impl: Arc<Impl>,
     handle_update: Handler,
     spawner: Arc<TaskSpawner>,
@@ -100,12 +100,14 @@ async fn run_bot<Impl, Handler, HandleResult>(
         }
         match stream.next().await {
             None => unreachable!("update stream never ends"),
-            Some(Ok(Update { update_id, content })) => {
+            Some(Ok(maybe_update)) => {
                 retried = 0;
-                debug!("{}> handling", update_id.0);
-                let content = content.unwrap_or_default();
-                if !may_handle_common_command(update_id, &content, bot, &spawner, &shutdown) {
-                    spawner.spawn((handle_update)(bot_impl.clone(), update_id, content));
+                if let Some(Update { update_id, content }) = maybe_update {
+                    debug!("{}> handling", update_id.0);
+                    let content = content.unwrap_or_default();
+                    if !may_handle_common_command(update_id, &content, bot, &spawner, &shutdown) {
+                        spawner.spawn((handle_update)(bot_impl.clone(), update_id, content));
+                    }
                 }
             }
             Some(Err(e)) => {
