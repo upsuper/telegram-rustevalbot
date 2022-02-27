@@ -110,9 +110,12 @@ async fn run_bot<Impl, Handler, HandleResult>(
             }
             Some(Err(e)) => {
                 (report_error)(bot, &e);
-                warn!("({}) telegram error: {:?}", retried, e);
+                warn!(
+                    "{}: telegram error ({} retries): {:?}",
+                    bot.username, retried, e,
+                );
                 if retried >= 13 {
-                    error!("retried too many times!");
+                    error!("{}: retried too many times!", bot.username);
                     break;
                 } else {
                     let delay_duration = Duration::from_secs(1 << retried);
