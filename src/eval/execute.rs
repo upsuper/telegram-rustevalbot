@@ -56,7 +56,7 @@ async fn run_code(
     let channel = flags.channel.unwrap_or(Channel::Stable);
     let req = Request {
         channel,
-        edition: flags.edition.unwrap_or("2018"),
+        edition: flags.edition.unwrap_or("2021"),
         mode: flags.mode.unwrap_or(Mode::Debug),
         crate_type: CrateType::Bin,
         tests: false,
