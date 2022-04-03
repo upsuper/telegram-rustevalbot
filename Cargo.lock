@@ -1112,7 +1112,7 @@ dependencies = [
 
 [[package]]
 name = "telegram-rustevalbot"
-version = "0.4.24"
+version = "0.4.25"
 dependencies = [
  "combine",
  "derive_more",
