@@ -19,7 +19,7 @@ use telegram_types::bot::methods::{
 use telegram_types::bot::types::{ChatId, Message, MessageId, ParseMode, Update, UpdateId};
 use tokio::time::timeout;
 
-const TELEGRAM_TIMEOUT_SECS: u16 = 600;
+const TELEGRAM_TIMEOUT_SECS: u16 = 30;
 
 /// Telegram bot
 #[derive(Clone, Debug)]
