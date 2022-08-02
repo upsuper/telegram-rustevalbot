@@ -66,10 +66,10 @@ static UNICODE_CHARS_MAP: phf::Map<char, &str> = phf_map! {
 
 /// Normalize the mistakenly inputted Unicode character
 /// to the corresponding ASCII character.
-/// 
+///
 /// For the table what characters this function will convert,
 /// you can refer to [`UNICODE_CHARS_MAP`].
-/// 
+///
 /// Time complexity of this is `O(n)`.
 pub fn normalize_unicode_chars(inputs: &str) -> String {
     let mut output = String::with_capacity(inputs.len());

@@ -95,7 +95,7 @@ fn generate_code_to_send(code: &str, bare: bool, raw: bool) -> String {
             code = body
         ))
     };
-    
+
     // Normalize the code if `raw` is false.
     let code = if raw {
         code
