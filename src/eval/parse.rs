@@ -127,6 +127,11 @@ const FLAG_INFO: &[FlagInfo] = &[
         setter: |flags| flags.bare = true,
     },
     FlagInfo {
+        name: "raw",
+        description: "don't convert any Unicode characters automatically",
+        setter: |flags| flags.raw = true,
+    },
+    FlagInfo {
         name: "version",
         description: "show version instead of running code",
         setter: |flags| flags.version = true,
@@ -144,6 +149,7 @@ pub struct Flags {
     pub edition: Option<&'static str>,
     pub mode: Option<Mode>,
     pub bare: bool,
+    pub raw: bool,
     pub version: bool,
     pub help: bool,
 }
@@ -345,6 +351,7 @@ mod tests {
             mode: Some(Mode::Debug),
             edition: Some("2015"),
             bare: true,
+            raw: false,
             version: true,
             help: false,
         };
