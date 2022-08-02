@@ -1,4 +1,5 @@
 use htmlescape::encode_minimal;
+use phf::phf_map;
 use std::borrow::Cow;
 use std::fmt;
 use telegram_types::bot::types::{ChatType, Message};
@@ -53,6 +54,35 @@ pub fn encode_with_code(output: &mut String, text: &str) {
         }
         is_code = !is_code;
     }
+}
+
+static UNICODE_CHARS_MAP: phf::Map<char, &str> = phf_map! {
+    '“' => "\"",
+    '”' => "\"",
+    '‘' => "\'",
+    '’' => "\'",
+    '—' => "--"
+};
+
+/// Normalize the mistakenly inputted Unicode character
+/// to the corresponding ASCII character.
+/// 
+/// For the table what characters this function will convert,
+/// you can refer to [`UNICODE_CHARS_MAP`].
+/// 
+/// Time complexity of this is `O(n)`.
+pub fn normalize_unicode_chars(inputs: &str) -> String {
+    let mut output = String::with_capacity(inputs.len());
+
+    for c in inputs.chars() {
+        if let Some(replacement) = UNICODE_CHARS_MAP.get(&c) {
+            output.push_str(replacement);
+        } else {
+            output.push(c);
+        }
+    }
+
+    output
 }
 
 #[cfg(test)]
