@@ -20,7 +20,7 @@ pub fn parse_command(command: &str) -> Option<Command<'_>> {
     let bot_name = token('@').with(recognize(skip_many1(choice((alpha_num(), token('_'))))));
     let spaces1 = || (space(), spaces()).map(|_| ());
     let flag_name = recognize(skip_many1(alpha_num()));
-    let flag = (spaces1(), string("--"), flag_name).map(|(_, _, name)| name);
+    let flag = (spaces1(), string("--").or(string("—")), flag_name).map(|(_, _, name)| name);
     let mut parser = string("/eval")
         .with((
             optional(bot_name),
@@ -373,6 +373,22 @@ mod tests {
                 bot_name: Some("bot"),
                 flags: Flags {
                     bare: true,
+                    ..Flags::default()
+                },
+                content: "content",
+            })
+        );
+    }
+
+    #[test]
+    fn flags_with_unicode_dash() {
+        assert_eq!(
+            parse_command("/eval@bot --bare —raw content"),
+            Some(Command {
+                bot_name: Some("bot"),
+                flags: Flags {
+                    bare: true,
+                    raw: true,
                     ..Flags::default()
                 },
                 content: "content",
