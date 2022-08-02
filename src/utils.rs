@@ -137,4 +137,17 @@ mod test {
             );
         }
     }
+
+    #[test]
+    fn test_normalize_unicode_chars() {
+        const TEST_MAP: [(&str, &str); 3] = [
+            (r#"“Hello, World”"#, r#""Hello, World""#),
+            (r#"“Hello —World”"#, r#""Hello --World""#),
+            (r#"‘a’ > 'B" “"#, r#"'a' > 'B" ""#),
+        ];
+
+        TEST_MAP.iter().for_each(|(input, expected)| {
+            assert_eq!(&normalize_unicode_chars(input), expected);
+        });
+    }
 }
