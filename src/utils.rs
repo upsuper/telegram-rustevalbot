@@ -71,10 +71,15 @@ static UNICODE_CHARS_MAP: phf::Map<char, &str> = phf_map! {
 /// you can refer to [`UNICODE_CHARS_MAP`].
 ///
 /// Time complexity of this is `O(n)`.
-pub fn normalize_unicode_chars(inputs: &str) -> String {
-    let mut output = String::with_capacity(inputs.len());
+pub fn normalize_unicode_chars(input: &str) -> Cow<str> {
+    // If the input is ASCII, there is no need to normalize.
+    if input.is_ascii() {
+        return input.into();
+    }
 
-    for c in inputs.chars() {
+    let mut output = String::with_capacity(input.len());
+
+    for c in input.chars() {
         if let Some(replacement) = UNICODE_CHARS_MAP.get(&c) {
             output.push_str(replacement);
         } else {
@@ -82,7 +87,7 @@ pub fn normalize_unicode_chars(inputs: &str) -> String {
         }
     }
 
-    output
+    output.into()
 }
 
 #[cfg(test)]
