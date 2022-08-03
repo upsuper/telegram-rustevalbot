@@ -1,6 +1,6 @@
 use super::parse::Flags;
 use crate::eval::parse::{get_help_message, Channel, Mode};
-use crate::utils::{self, normalize_unicode_chars};
+use crate::utils;
 use futures::{future, FutureExt as _};
 use htmlescape::{encode_attribute, encode_minimal};
 use log::{debug, warn};
@@ -52,7 +52,8 @@ async fn run_code(
     flags: Flags,
     is_private: bool,
 ) -> Result<String, reqwest::Error> {
-    let code = generate_code_to_send(code, flags.bare, flags.raw);
+    let normalized_code = utils::normalize_unicode_chars(code);
+    let code = generate_code_to_send(&normalized_code, flags.bare);
     let channel = flags.channel.unwrap_or(Channel::Stable);
     let req = Request {
         channel,
@@ -71,7 +72,7 @@ async fn run_code(
 
 const PRELUDE: &str = include_str!("prelude.res.rs");
 
-fn generate_code_to_send(code: &str, bare: bool, raw: bool) -> String {
+fn generate_code_to_send(code: &str, bare: bool) -> String {
     if bare || code.contains("fn main()") {
         return code.to_string();
     }
@@ -94,13 +95,6 @@ fn generate_code_to_send(code: &str, bare: bool, raw: bool) -> String {
             },
             code = body
         ))
-    };
-
-    // Normalize the code if `raw` is false.
-    let code = if raw {
-        code
-    } else {
-        Cow::Owned(normalize_unicode_chars(&code))
     };
 
     format!(
