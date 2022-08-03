@@ -145,10 +145,12 @@ mod test {
 
     #[test]
     fn test_normalize_unicode_chars() {
-        const TEST_MAP: [(&str, &str); 3] = [
-            (r#"“Hello, World”"#, r#""Hello, World""#),
-            (r#"“Hello —World”"#, r#""Hello --World""#),
-            (r#"‘a’ > 'B" “"#, r#"'a' > 'B" ""#),
+        const TEST_MAP: &[(&str, &str)] = &[
+            ("“Hello, World”", "\"Hello, World\""),
+            ("—eval", "--eval"),
+            ("‘a’", "'a'"),
+            ("--eval", "--eval"),
+            ("--—", "----"),
         ];
 
         TEST_MAP.iter().for_each(|(input, expected)| {
