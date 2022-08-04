@@ -52,8 +52,8 @@ async fn run_code(
     flags: Flags,
     is_private: bool,
 ) -> Result<String, reqwest::Error> {
-    let normalized_code = utils::normalize_unicode_chars(code);
-    let code = generate_code_to_send(&normalized_code, flags.bare);
+    let code = utils::normalize_unicode_chars(code);
+    let code = generate_code_to_send(&code, flags.bare);
     let channel = flags.channel.unwrap_or(Channel::Stable);
     let req = Request {
         channel,
@@ -96,7 +96,6 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
             code = body
         ))
     };
-
     format!(
         template! {
             "#![allow(dead_code)]",
