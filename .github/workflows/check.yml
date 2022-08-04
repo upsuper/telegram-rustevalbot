@@ -55,8 +55,46 @@ jobs:
           key: ${{ runner.os }}-clippy-${{ steps.toolchain.outputs.rustc_hash }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-clippy-${{ steps.toolchain.outputs.rustc_hash }}-
+
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        id: toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Cache Cargo
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Cache target
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: ${{ runner.os }}-test-${{ steps.toolchain.outputs.rustc_hash }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ steps.toolchain.outputs.rustc_hash }}-
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
