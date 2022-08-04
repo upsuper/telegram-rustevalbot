@@ -20,7 +20,7 @@ pub fn parse_command(command: &str) -> Option<Command<'_>> {
     let bot_name = token('@').with(recognize(skip_many1(choice((alpha_num(), token('_'))))));
     let spaces1 = || (space(), spaces()).map(|_| ());
     let flag_name = recognize(skip_many1(alpha_num()));
-    let flag = (spaces1(), string("--"), flag_name).map(|(_, _, name)| name);
+    let flag = (spaces1(), choice((string("--"), string("—"))), flag_name).map(|(_, _, name)| name);
     let mut parser = string("/eval")
         .with((
             optional(bot_name),
@@ -127,6 +127,11 @@ const FLAG_INFO: &[FlagInfo] = &[
         setter: |flags| flags.bare = true,
     },
     FlagInfo {
+        name: "raw",
+        description: "don't convert any Unicode characters automatically",
+        setter: |flags| flags.raw = true,
+    },
+    FlagInfo {
         name: "version",
         description: "show version instead of running code",
         setter: |flags| flags.version = true,
@@ -144,6 +149,7 @@ pub struct Flags {
     pub edition: Option<&'static str>,
     pub mode: Option<Mode>,
     pub bare: bool,
+    pub raw: bool,
     pub version: bool,
     pub help: bool,
 }
@@ -345,6 +351,7 @@ mod tests {
             mode: Some(Mode::Debug),
             edition: Some("2015"),
             bare: true,
+            raw: false,
             version: true,
             help: false,
         };
@@ -366,6 +373,22 @@ mod tests {
                 bot_name: Some("bot"),
                 flags: Flags {
                     bare: true,
+                    ..Flags::default()
+                },
+                content: "content",
+            })
+        );
+    }
+
+    #[test]
+    fn flags_with_unicode_dash() {
+        assert_eq!(
+            parse_command("/eval@bot --bare —raw content"),
+            Some(Command {
+                bot_name: Some("bot"),
+                flags: Flags {
+                    bare: true,
+                    raw: true,
                     ..Flags::default()
                 },
                 content: "content",

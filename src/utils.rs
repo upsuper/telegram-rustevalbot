@@ -1,4 +1,5 @@
 use htmlescape::encode_minimal;
+use phf::phf_map;
 use std::borrow::Cow;
 use std::fmt;
 use telegram_types::bot::types::{ChatType, Message};
@@ -55,6 +56,40 @@ pub fn encode_with_code(output: &mut String, text: &str) {
     }
 }
 
+static UNICODE_CHARS_MAP: phf::Map<char, &str> = phf_map! {
+    '“' => "\"",
+    '”' => "\"",
+    '‘' => "\'",
+    '’' => "\'",
+    '—' => "--"
+};
+
+/// Normalize the mistakenly inputted Unicode character
+/// to the corresponding ASCII character.
+///
+/// For the table what characters this function will convert,
+/// you can refer to [`UNICODE_CHARS_MAP`].
+///
+/// Time complexity of this is `O(n)`.
+pub fn normalize_unicode_chars(input: &str) -> Cow<str> {
+    // If the input is ASCII, there is no need to normalize.
+    if input.is_ascii() {
+        return input.into();
+    }
+
+    let mut output = String::with_capacity(input.len());
+
+    for c in input.chars() {
+        if let Some(replacement) = UNICODE_CHARS_MAP.get(&c) {
+            output.push_str(replacement);
+        } else {
+            output.push(c);
+        }
+    }
+
+    output.into()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -106,5 +141,20 @@ mod test {
                 construct_string(expected)
             );
         }
+    }
+
+    #[test]
+    fn test_normalize_unicode_chars() {
+        const TEST_MAP: &[(&str, &str)] = &[
+            ("“Hello, World”", "\"Hello, World\""),
+            ("—eval", "--eval"),
+            ("‘a’", "'a'"),
+            ("--eval", "--eval"),
+            ("--—", "----"),
+        ];
+
+        TEST_MAP.iter().for_each(|(input, expected)| {
+            assert_eq!(&normalize_unicode_chars(input), expected);
+        });
     }
 }
