@@ -6,7 +6,7 @@ use std::cell::{Cell, RefCell, UnsafeCell};
 use std::char;
 use std::cmp::{max, min, Eq, Ord, PartialEq, PartialOrd};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::convert::{TryFrom, TryInto};
+use std::convert::{identity, TryFrom, TryInto};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
