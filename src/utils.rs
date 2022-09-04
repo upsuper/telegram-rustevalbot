@@ -61,7 +61,8 @@ static UNICODE_CHARS_MAP: phf::Map<char, &str> = phf_map! {
     '”' => "\"",
     '‘' => "\'",
     '’' => "\'",
-    '—' => "--"
+    '—' => "--",
+    '\u{a0}' => " ",
 };
 
 /// Normalize the mistakenly inputted Unicode character to the corresponding ASCII character.
