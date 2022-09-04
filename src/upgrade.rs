@@ -1,6 +1,7 @@
 use crate::shutdown::Shutdown;
 use log::{debug, info};
-use notify::{self, DebouncedEvent, RecursiveMode, Watcher};
+use notify::{self, Event, EventKind, RecommendedWatcher, RecursiveMode, Result, Watcher};
+use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
@@ -15,16 +16,20 @@ pub fn init(shutdown: Arc<Shutdown>) {
     });
 }
 
-fn init_watcher(tx: Sender<DebouncedEvent>) -> notify::Result<impl Watcher> {
-    let mut watcher = notify::watcher(tx, Default::default())?;
-    watcher.watch(NOTIFY_FILE, RecursiveMode::NonRecursive)?;
+fn init_watcher(tx: Sender<Result<Event>>) -> Result<impl Watcher> {
+    let mut watcher = RecommendedWatcher::new(tx, Default::default())?;
+    watcher.watch(Path::new(NOTIFY_FILE), RecursiveMode::NonRecursive)?;
     Ok(watcher)
 }
 
-fn watch_notify_file(_watcher: &impl Watcher, rx: &Receiver<DebouncedEvent>, shutdown: &Shutdown) {
+fn watch_notify_file(_watcher: &impl Watcher, rx: &Receiver<Result<Event>>, shutdown: &Shutdown) {
     for event in rx.iter() {
         debug!("notify: {:?}", event);
-        if let DebouncedEvent::NoticeWrite(_) = event {
+        if let Ok(Event {
+            kind: EventKind::Modify(_),
+            ..
+        }) = event
+        {
             info!("notify detected");
             shutdown.shutdown();
             break;
