@@ -91,7 +91,7 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
                 // Template below would provide the indent of this line.
                 "println!(\"{{:?}}\", {{",
                 "        {code}",
-                "    }})",
+                "    }});",
             },
             code = body
         ))
@@ -103,7 +103,7 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
             "{header}",
             "{prelude}",
             "fn main() -> Result<(), Box<dyn std::error::Error>> {{",
-            "    {code};",
+            "    {code}",
             "    Ok(())",
             "}}",
         },
