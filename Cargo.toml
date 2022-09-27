@@ -1,10 +1,10 @@
 [package]
 name = "telegram-rustevalbot"
-version = "0.4.27"
+version = "0.4.28"
 authors = ["Xidorn Quan <me@upsuper.org>"]
 license = "AGPL-3.0-or-later"
 homepage = "https://github.com/upsuper/telegram-rustevalbot"
-edition = "2018"
+edition = "2021"
 publish = false
 
 [dependencies]
