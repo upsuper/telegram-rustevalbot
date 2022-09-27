@@ -8,7 +8,6 @@ use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 use std::future::Future;
 
 pub fn execute<'p>(
@@ -84,9 +83,9 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
     let (header, body) = extract_code_headers(code);
     debug!("extract: {:?} -> ({:?}, {:?})", code, header, body);
     let code = if body.contains("println!") || body.contains("print!") {
-        Cow::from(body)
+        format!("{{{code}}}")
     } else {
-        Cow::from(format!(
+        format!(
             template! {
                 // Template below would provide the indent of this line.
                 "println!(\"{{:?}}\", {{",
@@ -94,7 +93,7 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
                 "    }});",
             },
             code = body
-        ))
+        )
     };
     format!(
         template! {
