@@ -1,3 +1,6 @@
+extern crate lazy_static;
+extern crate once_cell;
+
 use lazy_static::lazy_static;
 use once_cell::sync::Lazy;
 use std::any::{type_name, Any};
