@@ -153,7 +153,7 @@ impl Bot {
     where
         R: Method + Serialize,
     {
-        let request = self.client.post(&R::url(self.token)).json(&request).build();
+        let request = self.client.post(R::url(self.token)).json(&request).build();
         BotRequest {
             client: self.client.clone(),
             request,

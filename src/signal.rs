@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::thread;
 
 pub fn init(shutdown: Arc<Shutdown>) {
-    let mut signals = Signals::new(&[SIGINT, SIGTERM]).expect("failed to init signal handler");
+    let mut signals = Signals::new([SIGINT, SIGTERM]).expect("failed to init signal handler");
     thread::spawn(move || {
         for signal in signals.forever() {
             info!("signal: {}", signal);

@@ -17,7 +17,7 @@ fn main() {
 
 fn get_commit_info() -> Option<String> {
     let result = Command::new("git")
-        .args(&["log", "-1", "--date=short", "--pretty=format:%h / %cd"])
+        .args(["log", "-1", "--date=short", "--pretty=format:%h / %cd"])
         .output()
         .ok()?;
     String::from_utf8(result.stdout).ok()
