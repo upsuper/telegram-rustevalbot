@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Cache Cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
@@ -32,7 +32,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
       - name: Cache target
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: target
           key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.lock') }}
@@ -53,7 +53,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Cache Cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
@@ -62,7 +62,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
       - name: Cache target
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: target
           key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock') }}
