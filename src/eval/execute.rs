@@ -83,7 +83,7 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
     let (header, body) = extract_code_headers(code);
     debug!("extract: {:?} -> ({:?}, {:?})", code, header, body);
     let code = if body.contains("println!") || body.contains("print!") {
-        format!("{{{code}}}")
+        format!("{{{code}}};")
     } else {
         format!(
             template! {
