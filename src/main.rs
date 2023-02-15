@@ -151,7 +151,7 @@ fn init_logger() {
                     if module_path.is_empty() {
                         Ok(())
                     } else {
-                        write!(buf, "{}: ", module_path)
+                        write!(buf, "{module_path}: ")
                     }
                 }
             };
@@ -173,10 +173,10 @@ fn report_error_to_admin(bot: &Bot, error: &Error) {
     let message = match error {
         Error::Parse(bot::ParseError { data, error }) => format!(
             "parse failed: {:?}\n<pre>{}</pre>",
-            encode_minimal(&format!("{:?}", error)),
+            encode_minimal(&format!("{error:?}")),
             encode_minimal(&String::from_utf8_lossy(data)),
         ),
-        _ => encode_minimal(&format!("{:?}", error)),
+        _ => encode_minimal(&format!("{error:?}")),
     };
     tokio::spawn(send_message_to_admin(bot, message));
 }

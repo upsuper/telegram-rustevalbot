@@ -45,7 +45,7 @@ impl<'a> BotRunner<'a> {
                 return receiver;
             }
             Err(VarError::NotUnicode(s)) => {
-                panic!("invalid value for {}: {:?}", token_env, s);
+                panic!("invalid value for {token_env}: {s:?}");
             }
         };
         let client = self.client.clone();

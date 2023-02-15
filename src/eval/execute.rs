@@ -169,10 +169,10 @@ fn generate_result_from_response(resp: Response, channel: Channel, is_private: b
         });
         let line = RE_ISSUE.replacen(&line, 1, |captures: &Captures<'_>| {
             let issue_num = captures.get(1).unwrap().as_str();
-            let url = format!("https://github.com/rust-lang/rust/issues/{}", issue_num);
-            format!(r#"(see issue <a href="{}">#{}</a>)"#, url, issue_num)
+            let url = format!("https://github.com/rust-lang/rust/issues/{issue_num}");
+            format!(r#"(see issue <a href="{url}">#{issue_num}</a>)"#)
         });
-        format!("{}", line)
+        format!("{line}")
     } else {
         "(nothing??)".to_string()
     }

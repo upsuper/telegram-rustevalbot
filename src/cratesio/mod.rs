@@ -116,7 +116,7 @@ impl Crate {
 
         let description: Option<Cow<'_, str>> =
             description.map(|d| d.split_whitespace().join(" ").into());
-        let title = format!("{} {}", name, max_version);
+        let title = format!("{name} {max_version}");
         let mut message = format!(
             "<b>{}</b> ({})",
             encode_minimal(&name),
@@ -129,8 +129,8 @@ impl Crate {
 
         // The name can only use alphanumeric characters or `-` and `_`, so no escape is needed.
         // See https://doc.rust-lang.org/cargo/reference/manifest.html#the-name-field
-        let crate_url = format!("https://crates.io/crates/{}", name);
-        let doc_url = documentation.unwrap_or_else(|| format!("https://docs.rs/crate/{}", name));
+        let crate_url = format!("https://crates.io/crates/{name}");
+        let doc_url = documentation.unwrap_or_else(|| format!("https://docs.rs/crate/{name}"));
         let mut buttons = vec![
             InlineKeyboardButton {
                 text: "info".to_string(),

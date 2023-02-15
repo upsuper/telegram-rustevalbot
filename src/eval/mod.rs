@@ -175,7 +175,7 @@ fn generate_reply(reply: Result<String, reqwest::Error>) -> String {
             } else if err.is_timeout() {
                 "error: timeout".into()
             } else if let Some(status) = err.status() {
-                format!("error: status code: {}", status)
+                format!("error: status code: {status}")
             } else {
                 "error: unknown error".into()
             }

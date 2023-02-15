@@ -81,12 +81,12 @@ fn doc_item_to_result(item: &DocItem) -> InlineQueryResult<'static> {
         ItemType::Primitive => " (primitive type)",
         _ => "",
     };
-    let title = format!("{}{}", path, type_str);
+    let title = format!("{path}{type_str}");
     let description = item.desc.as_ref().to_string();
     // We don't escape path assuming they don't contain any HTML special
     // characters. This is checked in debug assertions in the lazy_static
     // block in `search` mod.
-    let mut message = format!(r#"<a href="{}">{}</a>{}"#, url, path, type_str);
+    let mut message = format!(r#"<a href="{url}">{path}</a>{type_str}"#);
     if !description.is_empty() {
         message.push_str(" - ");
         encode_with_code(&mut message, &description);

@@ -19,7 +19,7 @@ static SEEKER: Lazy<RustDocSeeker> = Lazy::new(|| {
                     .map_or(false, |p| p.as_ref().contains(SPECIAL_CHARS))
                 || item.name.as_ref().contains(SPECIAL_CHARS)
             {
-                panic!("Found path with HTML special character: {:?}", item);
+                panic!("Found path with HTML special character: {item:?}");
             }
         }
     }
