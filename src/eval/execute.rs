@@ -66,7 +66,7 @@ async fn run_code(
     const URL: &str = "https://play.rust-lang.org/execute";
     let resp = client.post(URL).json(&req).send().await?;
     let resp = resp.error_for_status()?.json().await?;
-    Ok(generate_result_from_response(resp, channel, is_private))
+    Ok(generate_result_from_response(client, resp, channel, is_private).await)
 }
 
 const PRELUDE: &str = include_str!("prelude.res.rs");
@@ -112,15 +112,23 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
     )
 }
 
-fn generate_result_from_response(resp: Response, channel: Channel, is_private: bool) -> String {
+async fn generate_result_from_response(client: &Client, resp: Response, channel: Channel, is_private: bool) -> String {
+    use std::borrow::Cow;
+
     if resp.success {
         let output = resp.stdout.trim();
-        let output = if is_private {
+        let output: Cow<'_, str> = if is_private {
             output.into()
         } else {
             const MAX_LINES: usize = 3;
             const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
-            utils::truncate_output(output, MAX_LINES, MAX_TOTAL_COLUMNS)
+            let mut truncated_output =
+                utils::truncate_output(output, MAX_LINES, MAX_TOTAL_COLUMNS).into_owned();
+            if let Some(pb_url) = paste_to_pb(client, output).await.ok() {
+                truncated_output += "\n";
+                truncated_output += &pb_url;
+            }
+            truncated_output.into()
         };
         if output.is_empty() {
             return "(no output)".to_string();
@@ -176,6 +184,20 @@ fn generate_result_from_response(resp: Response, channel: Channel, is_private: b
     } else {
         "(nothing??)".to_string()
     }
+}
+
+async fn paste_to_pb(client: &Client, code: &str) -> reqwest::Result<String> {
+    let resp = client
+        .post("https://paste.mozilla.org/api/")
+        .form(&[
+            ("lexer", "rust"),
+            ("expires", "2073600"),
+            ("content", code),
+        ])
+        .header("content-length", 0)
+        .send().await?
+        .text().await?;
+    Ok(resp.trim_matches('"').to_string())
 }
 
 #[derive(Debug, Serialize)]
