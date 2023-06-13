@@ -202,10 +202,11 @@ async fn generate_result_from_response(
     }
 }
 
+#[allow(unused)]
+const DPASTE_BASE_URL: &str = "https://paste.mozilla.org/";
+const DPASTE_API_URL: &str = "https://paste.mozilla.org/api/";
 /// result will be an url with an additional '\n'
 async fn paste_to_pb(client: &Client, code: &str) -> reqwest::Result<String> {
-    const DPASTE_API_URL: &str = "https://paste.mozilla.org/api/";
-
     let resp = client
         .post(DPASTE_API_URL)
         .form(&[("lexer", "rust"), ("content", code), ("format", "url")])
@@ -308,5 +309,21 @@ mod tests {
             let result = extract_code_headers(&code);
             assert_eq!(result, (header, body));
         }
+    }
+
+    #[test]
+    fn test_paste_to_pastebin() {
+        let client = crate::build_client();
+
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                let example_code = "fn main(){}";
+                assert!(paste_to_pb(&client, &example_code)
+                    .await
+                    .is_ok_and(|resp| resp.starts_with(DPASTE_BASE_URL)))
+            })
     }
 }
