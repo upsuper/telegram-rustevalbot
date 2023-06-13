@@ -112,22 +112,38 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
     )
 }
 
-async fn generate_result_from_response(client: &Client, resp: Response, channel: Channel, is_private: bool) -> String {
+async fn generate_result_from_response(
+    client: &Client,
+    resp: Response,
+    channel: Channel,
+    is_private: bool,
+) -> String {
     use std::borrow::Cow;
+    use std::fmt::Write;
 
     if resp.success {
+        const MAX_LINES: usize = 3;
+        const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
+
         let output = resp.stdout.trim();
-        let output: Cow<'_, str> = if is_private {
+        let output: Cow<'_, str> = if is_private || output.lines().count() <= MAX_LINES {
             output.into()
         } else {
-            const MAX_LINES: usize = 3;
-            const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
-            let mut truncated_output =
-                utils::truncate_output(output, MAX_LINES, MAX_TOTAL_COLUMNS).into_owned();
-            if let Some(pb_url) = paste_to_pb(client, output).await.ok() {
-                truncated_output += "\n";
-                truncated_output += &pb_url;
-            }
+            let truncated_output = {
+                let mut o =
+                    utils::truncate_output(output, MAX_LINES, MAX_TOTAL_COLUMNS).into_owned();
+                match paste_to_pb(client, &o).await {
+                    Ok(pb_url) => {
+                        let pb_url = pb_url.trim_end_matches('\n');
+                        let _ = write!(&mut o, "\n{pb_url}");
+                    }
+                    Err(e) => {
+                        let _ = write!(&mut o, "\nUnable to reserve the full output log:\n{e}");
+                    }
+                }
+                o
+            };
+
             truncated_output.into()
         };
         if output.is_empty() {
@@ -186,18 +202,16 @@ async fn generate_result_from_response(client: &Client, resp: Response, channel:
     }
 }
 
+/// result will be an url with an additional '\n'
 async fn paste_to_pb(client: &Client, code: &str) -> reqwest::Result<String> {
     let resp = client
         .post("https://paste.mozilla.org/api/")
-        .form(&[
-            ("lexer", "rust"),
-            ("expires", "2073600"),
-            ("content", code),
-        ])
-        .header("content-length", 0)
-        .send().await?
-        .text().await?;
-    Ok(resp.trim_matches('"').to_string())
+        .form(&[("lexer", "rust"), ("content", code), ("format", "url")])
+        .send()
+        .await?
+        .text()
+        .await?;
+    Ok(resp)
 }
 
 #[derive(Debug, Serialize)]
