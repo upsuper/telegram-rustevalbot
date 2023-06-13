@@ -204,8 +204,10 @@ async fn generate_result_from_response(
 
 /// result will be an url with an additional '\n'
 async fn paste_to_pb(client: &Client, code: &str) -> reqwest::Result<String> {
+    const DPASTE_API_URL: &str = "https://paste.mozilla.org/api/";
+
     let resp = client
-        .post("https://paste.mozilla.org/api/")
+        .post(DPASTE_API_URL)
         .form(&[("lexer", "rust"), ("content", code), ("format", "url")])
         .send()
         .await?
