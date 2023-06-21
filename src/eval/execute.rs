@@ -122,29 +122,31 @@ async fn generate_result_from_response(
     use std::fmt::Write;
 
     if resp.success {
-        const MAX_LINES: usize = 3;
-        const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
+        let output_ = resp.stdout.trim();
 
-        let output = resp.stdout.trim();
-        let output: Cow<'_, str> = if is_private || output.lines().count() <= MAX_LINES {
-            output.into()
+        let output: Cow<'_, str> = if is_private {
+            output_.into()
         } else {
-            let truncated_output = {
-                let mut o =
-                    utils::truncate_output(output, MAX_LINES, MAX_TOTAL_COLUMNS).into_owned();
-                match paste_to_pb(client, &o).await {
+            const MAX_LINES: usize = 3;
+            const MAX_TOTAL_COLUMNS: usize = MAX_LINES * 72;
+
+            if let (truncated_output, true) =
+                utils::truncate_output(output_, MAX_LINES, MAX_TOTAL_COLUMNS)
+            {
+                let mut output = truncated_output.into_owned();
+                match paste_to_pb(client, &output_).await {
                     Ok(pb_url) => {
                         let pb_url = pb_url.trim_end_matches('\n');
-                        let _ = write!(&mut o, "\n{pb_url}");
+                        let _ = write!(output, "\n{pb_url}");
                     }
                     Err(e) => {
-                        let _ = write!(&mut o, "\nUnable to reserve the full output log:\n{e}");
+                        let _ = write!(output, "\nUnable to upload the full output:\n{e}");
                     }
                 }
-                o
-            };
-
-            truncated_output.into()
+                return output.into();
+            } else {
+                output_.into()
+            }
         };
         if output.is_empty() {
             return "(no output)".to_string();

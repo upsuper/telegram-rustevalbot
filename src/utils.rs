@@ -14,7 +14,11 @@ impl fmt::Display for Void {
     }
 }
 
-pub fn truncate_output(output: &str, max_lines: usize, max_total_columns: usize) -> Cow<'_, str> {
+pub fn truncate_output(
+    output: &str,
+    max_lines: usize,
+    max_total_columns: usize,
+) -> (Cow<'_, str>, bool) {
     let mut line_count = 0;
     let mut column_count = 0;
     for (pos, c) in output.char_indices() {
@@ -24,18 +28,18 @@ pub fn truncate_output(output: &str, max_lines: usize, max_total_columns: usize)
             for (pos, c) in output[..pos].char_indices().rev() {
                 truncate_width += c.width_cjk().unwrap_or(1);
                 if truncate_width >= 3 {
-                    return format!("{}...", &output[..pos]).into();
+                    return (format!("{}...", &output[..pos]).into(), true);
                 }
             }
         }
         if c == '\n' {
             line_count += 1;
             if line_count == max_lines {
-                return format!("{}...", &output[..pos]).into();
+                return (format!("{}...", &output[..pos]).into(), true);
             }
         }
     }
-    output.into()
+    (output.into(), false)
 }
 
 pub fn is_message_from_private_chat(message: &Message) -> bool {
@@ -97,11 +101,12 @@ mod test {
     fn construct_string(parts: &[(&str, usize)]) -> String {
         let len = parts.iter().map(|(s, n)| s.len() * n).sum();
         let mut result = String::with_capacity(len);
-        for &(s, n) in parts.iter() {
-            for _ in 0..n {
-                result.push_str(s);
-            }
-        }
+        result.extend(
+            parts
+                .iter()
+                .map(|&(s, n)| std::iter::once(s).cycle().take(n))
+                .flatten(),
+        );
         result
     }
 
@@ -112,33 +117,44 @@ mod test {
         struct Testcase<'a> {
             input: &'a [(&'a str, usize)],
             expected: &'a [(&'a str, usize)],
+            truncated: bool,
         }
         const TESTCASES: &[Testcase<'_>] = &[
             Testcase {
                 input: &[("a", 216)],
                 expected: &[("a", 216)],
+                truncated: false,
             },
             Testcase {
                 input: &[("a", 217)],
                 expected: &[("a", 213), ("...", 1)],
+                truncated: true,
             },
             Testcase {
                 input: &[("啊", 300)],
                 expected: &[("啊", 106), ("...", 1)],
+                truncated: true,
             },
             Testcase {
                 input: &[("啊", 107), ("a", 5)],
                 expected: &[("啊", 106), ("...", 1)],
+                truncated: true,
             },
             Testcase {
                 input: &[("a\n", 10)],
                 expected: &[("a\n", 2), ("a...", 1)],
+                truncated: true,
             },
         ];
-        for Testcase { input, expected } in TESTCASES.iter() {
+        for Testcase {
+            input,
+            expected,
+            truncated,
+        } in TESTCASES.iter()
+        {
             assert_eq!(
                 truncate_output(&construct_string(input), MAX_LINES, MAX_TOTAL_COLUMNS),
-                construct_string(expected)
+                (construct_string(expected).into(), *truncated)
             );
         }
     }
