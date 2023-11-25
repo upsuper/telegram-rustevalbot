@@ -3,6 +3,7 @@ extern crate once_cell;
 
 use lazy_static::lazy_static;
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::any::{type_name, Any};
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell, UnsafeCell};
