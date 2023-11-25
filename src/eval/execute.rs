@@ -53,7 +53,13 @@ async fn run_code(
 ) -> Result<String, reqwest::Error> {
     let code = utils::normalize_unicode_chars(code);
     let code = generate_code_to_send(&code, flags.bare);
-    let channel = flags.channel.unwrap_or(Channel::Stable);
+    let channel = flags.channel.unwrap_or_else(|| {
+        if has_feature_attr(&code) {
+            Channel::Nightly
+        } else {
+            Channel::Stable
+        }
+    });
     let req = Request {
         channel,
         edition: flags.edition.unwrap_or("2021"),
@@ -110,6 +116,13 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
         prelude = PRELUDE,
         code = code,
     )
+}
+
+/// Check whether the code includes `#![feature(...)]`
+fn has_feature_attr(code: &str) -> bool {
+    static RE_FEATURE: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"#\s*!\s*\[\s*feature\s*\(").unwrap());
+    RE_FEATURE.find(code).is_some()
 }
 
 fn generate_result_from_response(resp: Response, channel: Channel, is_private: bool) -> String {
@@ -270,5 +283,17 @@ mod tests {
             let result = extract_code_headers(&code);
             assert_eq!(result, (header, body));
         }
+    }
+
+    #[test]
+    fn test_has_feature_attr() {
+        assert!(has_feature_attr("#![feature(test)]\nfn main() {}"));
+        assert!(has_feature_attr(
+            "#![allow(x)]\n#![feature(test)]\nfn main() {}"
+        ));
+        assert!(has_feature_attr(
+            "# \n!\r [ \r\n feature  (test)]\nfn main() {}"
+        ));
+        assert!(!has_feature_attr("#![cfg(x)]"));
     }
 }
