@@ -137,7 +137,12 @@ fn init_logger() {
             let timestamp = buf.timestamp();
             let level = record.level();
             let level_style = buf.default_level_style(level);
-            let write_header = write!(buf, "{:>5} {}: ", level_style.value(level), timestamp);
+            let write_header = write!(
+                buf,
+                "{}{level:>5}{} {timestamp}: ",
+                level_style.render(),
+                level_style.render_reset(),
+            );
             let write_module_path = match record.module_path() {
                 None => Ok(()),
                 Some(mut module_path) => {
