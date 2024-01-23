@@ -8,15 +8,10 @@ use std::thread;
 pub fn init(shutdown: Arc<Shutdown>) {
     let mut signals = Signals::new([SIGINT, SIGTERM]).expect("failed to init signal handler");
     thread::spawn(move || {
-        for signal in signals.forever() {
+        if let Some(signal) = signals.forever().next() {
             info!("signal: {}", signal);
-            match signal {
-                SIGINT | SIGTERM => {
-                    shutdown.shutdown();
-                    break;
-                }
-                _ => unreachable!(),
-            }
+            assert!(matches!(signal, SIGINT | SIGTERM));
+            shutdown.shutdown();
         }
     });
 }
