@@ -187,10 +187,13 @@ where
     }
 }
 
+// All the inner fields are used as part of `Debug` output, so they are not dead code.
+// But rustc explicitly excludes derive from dead code analysis, thus we need to allow dead code
+// below to avoid triggering the warning.
 #[derive(Debug, From)]
 pub enum Error {
-    Request(reqwest::Error),
-    Api(ApiError),
+    Request(#[allow(dead_code)] reqwest::Error),
+    Api(#[allow(dead_code)] ApiError),
     Parse(ParseError),
 }
 
