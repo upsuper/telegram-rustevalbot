@@ -14,6 +14,7 @@ use std::convert::{identity, TryFrom, TryInto};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
+use std::future::{Future, IntoFuture, pending, poll_fn, ready};
 use std::hash::Hash;
 use std::hint::unreachable_unchecked;
 use std::io;
