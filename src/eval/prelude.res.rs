@@ -37,6 +37,7 @@ use std::sync::atomic::{AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicIsize};
 use std::sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, AtomicUsize};
 use std::sync::{Arc, Mutex, RwLock};
 
+#[allow(dead_code)]
 fn type_name_of_val<T: ?Sized>(_: &T) -> &'static str {
     type_name::<T>()
 }
