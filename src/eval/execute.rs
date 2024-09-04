@@ -103,8 +103,7 @@ fn generate_code_to_send(code: &str, bare: bool) -> String {
     };
     format!(
         template! {
-            "#![allow(dead_code)]",
-            "#![allow(unused_imports)]",
+            "#![allow(warnings)]",
             "{header}",
             "{prelude}",
             "fn main() -> Result<(), Box<dyn std::error::Error>> {{",
