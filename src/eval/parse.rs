@@ -112,6 +112,11 @@ const FLAG_INFO: &[FlagInfo] = &[
         setter: |flags| flags.edition = Some("2021"),
     },
     FlagInfo {
+        name: "2024",
+        description: "use 2024 edition",
+        setter: |flags| flags.edition = Some("2024"),
+    },
+    FlagInfo {
         name: "debug",
         description: "do debug build",
         setter: |flags| flags.mode = Some(Mode::Debug),
