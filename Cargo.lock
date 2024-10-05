@@ -1349,9 +1349,9 @@ dependencies = [
 
 [[package]]
 name = "telegram_types"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65fbbd3682676950376d87d8d1a4c1b49dd76d214156bfb43290faf3eaade91b"
+checksum = "e8158cb719d6d49a1a2c32c8aae217c8522b26e94c2f0576aa47fc2fd77b2d0b"
 dependencies = [
  "serde",
  "serde_derive",
@@ -1479,9 +1479,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-width"
-version = "0.1.14"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
+checksum = "1fc81956842c57dac11422a97c3b8195a1ff727f06e85c84ed2e8aa277c9a0fd"
 
 [[package]]
 name = "untrusted"
